@@ -27,12 +27,19 @@ export default function HomePage() {
   const [newType, setNewType] = useState<string>("Book");
   const [creating, setCreating] = useState(false);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/projects")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data)) setProjects(data);
+        if (Array.isArray(data)) {
+          setProjects(data);
+        } else if (data.error) {
+          setLoadError(data.error);
+        }
       })
+      .catch(() => setLoadError("Failed to load projects."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -43,9 +50,12 @@ export default function HomePage() {
           (p) => p.type === activeTab.slice(0, -1) || p.type === activeTab
         );
 
+  const [error, setError] = useState<string | null>(null);
+
   async function handleCreate() {
     if (!newName.trim()) return;
     setCreating(true);
+    setError(null);
     try {
       const res = await fetch("/api/projects", {
         method: "POST",
@@ -53,12 +63,19 @@ export default function HomePage() {
         body: JSON.stringify({ name: newName.trim(), type: newType }),
       });
       const data = await res.json();
-      if (res.ok && data.id) {
+      if (!res.ok) {
+        setError(data.error || "Failed to create project.");
+        return;
+      }
+      if (data.id) {
+        setProjects((prev) => [data, ...prev]);
         setShowModal(false);
         setNewName("");
         setNewType("Book");
         router.push(`/projects/${data.id}`);
       }
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setCreating(false);
     }
@@ -107,9 +124,12 @@ export default function HomePage() {
       </div>
 
       {/* Table */}
+      {loadError && (
+        <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{loadError}</p>
+      )}
       {loading ? (
         <p className="text-sm text-white/40">Loading projects…</p>
-      ) : projects.length === 0 ? (
+      ) : projects.length === 0 && !loadError ? (
         <div className="py-16 text-center">
           <p className="text-white/40">No projects yet.</p>
           <button
@@ -190,9 +210,13 @@ export default function HomePage() {
               ))}
             </select>
 
+            {error && (
+              <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+            )}
+
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => { setShowModal(false); setError(null); }}
                 className="rounded-lg px-4 py-2 text-sm text-white/50 transition-colors hover:text-white/80"
               >
                 Cancel
