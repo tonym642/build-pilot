@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
-import { supabase } from "@/lib/supabase";
+import { useState, useRef, useEffect, useCallback, use } from "react";
+
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
 type Stage = (typeof STAGES)[number];
@@ -207,7 +207,6 @@ function BrainstormingPanel({
     setLoading(true);
 
     try {
-      console.log("PROJECT ID INSIDE PANEL:", projectId);
       const res = await fetch("/api/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -818,18 +817,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [compilationItems, setCompilationItems] = useState<CompilationItem[]>([]);
   const [draftBlocks, setDraftBlocks] = useState<DraftBlocks>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
 
-  // Load project record from Supabase
+  // Load project record via API
   useEffect(() => {
     if (!projectId) return;
-    supabase
-      .from("projects")
-      .select("*")
-      .eq("id", projectId)
-      .single()
-      .then(({ data }) => {
-        if (data) {
+    fetch(`/api/projects/${projectId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.id) {
           setProjectName(data.name ?? "");
+          if (data.book_info) {
+            setBookInfo({ ...EMPTY_BOOK_INFO, ...data.book_info });
+          }
         }
       });
   }, [projectId]);
@@ -838,13 +838,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   useEffect(() => {
     if (!projectId) return;
     async function loadMessages() {
-      const { data, error } = await supabase
-        .from("messages")
-        .select("*")
-        .eq("project_id", projectId)
-        .order("created_at", { ascending: true });
+      const res = await fetch(`/api/projects/${projectId}/messages`);
+      const data = await res.json();
 
-      if (error || !data || data.length === 0) return;
+      if (!Array.isArray(data) || data.length === 0) {
+        setMessagesLoaded(true);
+        return;
+      }
 
       const grouped: Record<string, typeof data> = {};
       for (const row of data) {
@@ -894,13 +894,108 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         }
         return merged;
       });
+      setMessagesLoaded(true);
     }
     loadMessages();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
+  // Load compilation items from Supabase on mount
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/compilations`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const items: CompilationItem[] = data.map((row: Record<string, unknown>) => ({
+            id: row.id as string,
+            content: row.content as string,
+            chapter: row.chapter as string,
+            createdAt: new Date(row.created_at as string),
+            sourceMessageId: (row.source_message_id as number) ?? 0,
+            isFavorite: (row.is_favorite as boolean) ?? false,
+          }));
+          setCompilationItems(items);
+        }
+      });
+  }, [projectId]);
+
+  // Load draft blocks from Supabase on mount
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/drafts`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const grouped: DraftBlocks = {};
+          for (const row of data) {
+            const chapter = row.chapter as string;
+            if (!grouped[chapter]) grouped[chapter] = [];
+            grouped[chapter].push({
+              id: row.id as string,
+              content: row.content as string,
+              previousContent: (row.previous_content as string) ?? null,
+              sourceCompilationId: (row.source_compilation_id as string) ?? "",
+              createdAt: new Date(row.created_at as string),
+            });
+          }
+          setDraftBlocks(grouped);
+        }
+      });
+  }, [projectId]);
+
+  // Auto-save compilation items (debounced)
+  const compilationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const compilationLoadedRef = useRef(false);
+
+  useEffect(() => {
+    // Skip the initial load-triggered update
+    if (!compilationLoadedRef.current) {
+      compilationLoadedRef.current = true;
+      return;
+    }
+    if (compilationTimerRef.current) clearTimeout(compilationTimerRef.current);
+    compilationTimerRef.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/compilations`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: compilationItems }),
+      });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compilationItems]);
+
+  // Auto-save draft blocks (debounced)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftLoadedRef = useRef(false);
+
+  useEffect(() => {
+    // Skip the initial load-triggered update
+    if (!draftLoadedRef.current) {
+      draftLoadedRef.current = true;
+      return;
+    }
+    // Flatten draftBlocks into array with chapter info
+    const allBlocks: Record<string, unknown>[] = [];
+    for (const [chapter, blocks] of Object.entries(draftBlocks)) {
+      for (const block of blocks) {
+        allBlocks.push({ ...block, chapter });
+      }
+    }
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/drafts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks: allBlocks }),
+      });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftBlocks]);
+
   // Auto-create or restore chat when entering Brainstorming for a section
   useEffect(() => {
+    if (!messagesLoaded) return;
     if (activeStage !== "Brainstorming") return;
     const sectionChats = brainstormChats[activeSection] ?? [];
     if (sectionChats.length === 0) {
@@ -918,7 +1013,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       setActiveChatIds((prev) => ({ ...prev, [activeSection]: latest.id }));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, activeSection]);
+  }, [activeStage, activeSection, messagesLoaded]);
+
+  // Save book info to Supabase with debounce
+  const bookInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleBookInfoChange = useCallback((updated: BookInfo) => {
+    setBookInfo(updated);
+    if (bookInfoTimerRef.current) clearTimeout(bookInfoTimerRef.current);
+    bookInfoTimerRef.current = setTimeout(() => {
+      fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: projectId, book_info: updated }),
+      });
+    }, 800);
+  }, [projectId]);
 
   function handleNewBrainstormChat(chapter: string) {
     const chat: BrainstormChat = {
@@ -1266,7 +1376,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {/* Main content */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {activeSection === "book_info" ? (
-            <BookInfoPanel bookInfo={bookInfo} onChange={setBookInfo} />
+            <BookInfoPanel bookInfo={bookInfo} onChange={handleBookInfoChange} />
           ) : activeStage === "Brainstorming" ? (
             <BrainstormingPanel
               chapter={activeSection}

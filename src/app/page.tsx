@@ -15,6 +15,7 @@ type Project = {
   type: string;
   created_at: string;
   updated_at: string | null;
+  archived: boolean | null;
 };
 
 export default function HomePage() {
@@ -26,11 +27,13 @@ export default function HomePage() {
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<string>("Book");
   const [creating, setCreating] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/projects")
+    setLoading(true);
+    fetch(`/api/projects?archived=${showArchived}`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -41,7 +44,7 @@ export default function HomePage() {
       })
       .catch(() => setLoadError("Failed to load projects."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [showArchived]);
 
   const filtered =
     activeTab === "All"
@@ -51,6 +54,23 @@ export default function HomePage() {
         );
 
   const [error, setError] = useState<string | null>(null);
+
+  async function loadProjects() {
+    const res = await fetch(`/api/projects?archived=${showArchived}`);
+    const data = await res.json();
+    if (Array.isArray(data)) setProjects(data);
+  }
+
+  async function handleArchive(projectId: string) {
+    const res = await fetch("/api/projects", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: projectId, archived: !showArchived }),
+    });
+    if (res.ok) {
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    }
+  }
 
   async function handleCreate() {
     if (!newName.trim()) return;
@@ -68,10 +88,10 @@ export default function HomePage() {
         return;
       }
       if (data.id) {
-        setProjects((prev) => [data, ...prev]);
         setShowModal(false);
         setNewName("");
         setNewType("Book");
+        await loadProjects();
         router.push(`/projects/${data.id}`);
       }
     } catch {
@@ -94,7 +114,9 @@ export default function HomePage() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {showArchived ? "Archived Projects" : "Projects"}
+          </h1>
           <p className="mt-1 text-sm text-white/40">Manage your builds</p>
         </div>
         <button
@@ -145,7 +167,8 @@ export default function HomePage() {
             <tr className="text-left text-xs font-medium uppercase tracking-widest text-white/30">
               <th className="pb-3 pr-6 font-medium">Name</th>
               <th className="pb-3 pr-6 font-medium">Type</th>
-              <th className="pb-3 font-medium">Updated</th>
+              <th className="pb-3 pr-6 font-medium">Updated</th>
+              <th className="pb-3 font-medium"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.06]">
@@ -163,14 +186,32 @@ export default function HomePage() {
                   </Link>
                 </td>
                 <td className="py-3.5 pr-6 text-white/50">{project.type}</td>
-                <td className="py-3.5 text-white/40">
+                <td className="py-3.5 pr-6 text-white/40">
                   {formatDate(project.updated_at ?? project.created_at)}
+                </td>
+                <td className="py-3.5 text-right">
+                  <button
+                    onClick={() => handleArchive(project.id)}
+                    className="rounded px-2 py-1 text-xs text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                  >
+                    {showArchived ? "Unarchive" : "Archive"}
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+
+      {/* Archived toggle */}
+      <div className="mt-6">
+        <button
+          onClick={() => setShowArchived((v) => !v)}
+          className="text-xs text-white/30 transition-colors hover:text-white/60"
+        >
+          {showArchived ? "← Back to active projects" : "View archived projects"}
+        </button>
+      </div>
 
       {/* Create Project Modal */}
       {showModal && (
