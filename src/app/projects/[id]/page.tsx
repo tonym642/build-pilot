@@ -204,6 +204,7 @@ function BrainstormingPanel({
     setLoading(true);
 
     try {
+      console.log("PROJECT ID INSIDE PANEL:", projectId);
       const res = await fetch("/api/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
