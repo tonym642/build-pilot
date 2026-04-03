@@ -72,7 +72,13 @@ ${message}`;
       console.error("Supabase insert (assistant) failed:", err);
     }
 
-    return NextResponse.json({ reply });
+    return NextResponse.json({
+      reply,
+      debug: {
+        body,
+        projectId,
+      },
+    });
   } catch (err) {
     console.error("OpenAI request failed:", err);
     return NextResponse.json({ error: "OpenAI request failed" }, { status: 500 });
