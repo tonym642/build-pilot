@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, use } from "react";
+import { supabase } from "@/lib/supabase";
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
 type Stage = (typeof STAGES)[number];
@@ -815,6 +816,71 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [draftBlocks, setDraftBlocks] = useState<DraftBlocks>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
 
+  // Load persisted messages from Supabase on mount
+  useEffect(() => {
+    if (!projectId) return;
+    async function loadMessages() {
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("project_id", projectId)
+        .order("created_at", { ascending: true });
+
+      if (error || !data || data.length === 0) return;
+
+      const grouped: Record<string, typeof data> = {};
+      for (const row of data) {
+        const chapter = row.chapter_id ?? "Chapter 1";
+        if (!grouped[chapter]) grouped[chapter] = [];
+        grouped[chapter].push(row);
+      }
+
+      const newChats: BrainstormChats = {};
+      const newChatIds: Record<string, string> = {};
+
+      for (const [chapter, rows] of Object.entries(grouped)) {
+        const chatId = crypto.randomUUID();
+        const messages: Message[] = rows.map((row, i) => ({
+          id: i + 1,
+          role: (row.role === "assistant" ? "ai" : "user") as Message["role"],
+          text: row.message,
+        }));
+        const chat: BrainstormChat = {
+          id: chatId,
+          chapter,
+          title: null,
+          messages,
+          createdAt: new Date(rows[0].created_at),
+        };
+        newChats[chapter] = [chat];
+        newChatIds[chapter] = chatId;
+      }
+
+      // Merge: Supabase data wins for chapters that have no user-sent messages yet
+      setBrainstormChats((prev) => {
+        const merged: BrainstormChats = { ...prev };
+        for (const [chapter, chatList] of Object.entries(newChats)) {
+          const existingHasContent = (merged[chapter] ?? []).some((c) => c.messages.length > 0);
+          if (!existingHasContent) {
+            merged[chapter] = chatList;
+          }
+        }
+        return merged;
+      });
+      setActiveChatIds((prev) => {
+        const merged = { ...prev };
+        for (const [chapter, chatId] of Object.entries(newChatIds)) {
+          if (!prev[chapter]) {
+            merged[chapter] = chatId;
+          }
+        }
+        return merged;
+      });
+    }
+    loadMessages();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
   // Auto-create or restore chat when entering Brainstorming for a section
   useEffect(() => {
     if (activeStage !== "Brainstorming") return;
@@ -855,9 +921,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   function handleAddBrainstormMessage(chapter: string, chatId: string, message: Message) {
     setBrainstormChats((prev) => ({
       ...prev,
-      [chapter]: (prev[chapter] ?? []).map((c) =>
-        c.id === chatId ? { ...c, messages: [...c.messages, message] } : c
-      ),
+      [chapter]: (prev[chapter] ?? []).map((c) => {
+        if (c.id !== chatId) return c;
+        if (c.messages.some((m) => m.id === message.id)) return c;
+        return { ...c, messages: [...c.messages, message] };
+      }),
     }));
   }
 
