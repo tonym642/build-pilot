@@ -5,7 +5,8 @@ export async function GET() {
   const { data, error } = await supabase
     .from("projects")
     .select("*")
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -23,10 +24,14 @@ export async function POST(req: NextRequest) {
 
   const name = body.name.trim();
   const type = typeof body.type === "string" ? body.type : "Book";
+  const user_id = typeof body.user_id === "string" ? body.user_id : null;
+
+  const row: Record<string, unknown> = { name, type };
+  if (user_id) row.user_id = user_id;
 
   const { data, error } = await supabase
     .from("projects")
-    .insert([{ name, type }])
+    .insert([row])
     .select()
     .single();
 

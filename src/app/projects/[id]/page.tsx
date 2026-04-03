@@ -160,6 +160,7 @@ function AiActions({
 
 function BrainstormingPanel({
   projectId,
+  bookTitle,
   chapter,
   messages,
   activeChatId,
@@ -168,6 +169,7 @@ function BrainstormingPanel({
   onAddMessage,
 }: {
   projectId: string;
+  bookTitle: string;
   chapter: string;
   messages: Message[];
   activeChatId: string | null;
@@ -212,7 +214,7 @@ function BrainstormingPanel({
         body: JSON.stringify({
           message: trimmed,
           chapter,
-          bookTitle: "Life Basics 101",
+          bookTitle,
           project_id: projectId,
         }),
       });
@@ -806,6 +808,7 @@ function DraftPanel({
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = use(params);
+  const [projectName, setProjectName] = useState<string>("");
   const [activeStage, setActiveStage] = useState<Stage>("Brainstorming");
   const [activeSection, setActiveSection] = useState<SectionId>("Chapter 1");
   const [chapters, setChapters] = useState<string[]>(["Chapter 1", "Chapter 2", "Chapter 3"]);
@@ -815,6 +818,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [compilationItems, setCompilationItems] = useState<CompilationItem[]>([]);
   const [draftBlocks, setDraftBlocks] = useState<DraftBlocks>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
+
+  // Load project record from Supabase
+  useEffect(() => {
+    if (!projectId) return;
+    supabase
+      .from("projects")
+      .select("*")
+      .eq("id", projectId)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setProjectName(data.name ?? "");
+        }
+      });
+  }, [projectId]);
 
   // Load persisted messages from Supabase on mount
   useEffect(() => {
@@ -1001,7 +1019,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       const res = await fetch("/api/draft-assist", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: block.content, action, chapter, bookTitle: "Life Basics 101" }),
+        body: JSON.stringify({ content: block.content, action, chapter, bookTitle: projectName || bookInfo.title || "this book" }),
       });
       const data = await res.json();
       if (res.ok && data.result) {
@@ -1117,8 +1135,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
           {/* Book identity */}
           <div className="mb-4 px-2">
-            <p className="text-sm font-semibold tracking-tight text-white/90">Life Basics 101</p>
-            <p className="mt-0.5 text-xs text-white/35">Tony Medina</p>
+            <p className="text-sm font-semibold tracking-tight text-white/90">{projectName || bookInfo.title || "Untitled Project"}</p>
+            <p className="mt-0.5 text-xs text-white/35">{bookInfo.author || "\u00A0"}</p>
           </div>
           <div className="mb-4 border-t border-white/[0.07]" />
 
@@ -1216,8 +1234,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
           {/* Book identity */}
           <div className="mb-4 px-2">
-            <p className="text-sm font-semibold tracking-tight text-white/90">Life Basics 101</p>
-            <p className="mt-0.5 text-xs text-white/35">Tony Medina</p>
+            <p className="text-sm font-semibold tracking-tight text-white/90">{projectName || bookInfo.title || "Untitled Project"}</p>
+            <p className="mt-0.5 text-xs text-white/35">{bookInfo.author || "\u00A0"}</p>
           </div>
           <div className="mb-4 border-t border-white/[0.07]" />
 
@@ -1253,6 +1271,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <BrainstormingPanel
               chapter={activeSection}
               projectId={projectId}
+              bookTitle={projectName || bookInfo.title || "this book"}
               messages={(brainstormChats[activeSection] ?? []).find((c) => c.id === activeChatIds[activeSection])?.messages ?? []}
               activeChatId={activeChatIds[activeSection] ?? null}
               compilationItems={compilationItems}

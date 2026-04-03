@@ -13,7 +13,8 @@ type Project = {
   id: string;
   name: string;
   type: string;
-  updated_at: string;
+  created_at: string;
+  updated_at: string | null;
 };
 
 export default function HomePage() {
@@ -143,7 +144,7 @@ export default function HomePage() {
                 </td>
                 <td className="py-3.5 pr-6 text-white/50">{project.type}</td>
                 <td className="py-3.5 text-white/40">
-                  {formatDate(project.updated_at)}
+                  {formatDate(project.updated_at ?? project.created_at)}
                 </td>
               </tr>
             ))}
