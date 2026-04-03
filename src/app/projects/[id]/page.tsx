@@ -1182,6 +1182,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           ) : activeStage === "Brainstorming" ? (
             <BrainstormingPanel
               chapter={activeSection}
+              projectId={params.id}
               messages={(brainstormChats[activeSection] ?? []).find((c) => c.id === activeChatIds[activeSection])?.messages ?? []}
               activeChatId={activeChatIds[activeSection] ?? null}
               compilationItems={compilationItems}
