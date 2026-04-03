@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
   const chapter: string = typeof body.chapter === "string" ? body.chapter : "this chapter";
   const bookTitle: string = typeof body.bookTitle === "string" ? body.bookTitle : "this book";
   const projectId: string | null = typeof body.project_id === "string" ? body.project_id : null;
+  console.log("brainstorm body:", body);
+  console.log("projectId:", projectId);
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OpenAI API key not configured." }, { status: 500 });
