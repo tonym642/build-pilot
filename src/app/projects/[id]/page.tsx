@@ -159,6 +159,7 @@ function AiActions({
 
 function BrainstormingPanel({
   chapter,
+  projectId,
   messages,
   activeChatId,
   compilationItems,
@@ -166,6 +167,7 @@ function BrainstormingPanel({
   onAddMessage,
 }: {
   chapter: string;
+  projectId: string;
   messages: Message[];
   activeChatId: string | null;
   compilationItems: CompilationItem[];
@@ -209,7 +211,7 @@ function BrainstormingPanel({
           message: trimmed,
           chapter,
           bookTitle: "Life Basics 101",
-          project_id: params.id,
+          project_id: projectId,
         }),
       });
       const data = await res.json();
