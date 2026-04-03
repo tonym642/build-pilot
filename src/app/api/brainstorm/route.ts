@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { supabase } from "@/lib/supabase";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -15,9 +16,24 @@ export async function POST(req: NextRequest) {
   const message: string = body.message.trim();
   const chapter: string = typeof body.chapter === "string" ? body.chapter : "this chapter";
   const bookTitle: string = typeof body.bookTitle === "string" ? body.bookTitle : "this book";
+  const projectId: string | null = typeof body.project_id === "string" ? body.project_id : null;
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OpenAI API key not configured." }, { status: 500 });
+  }
+
+  // Save user message to Supabase
+  try {
+    await supabase.from("messages").insert([
+      {
+        project_id: projectId,
+        chapter_id: body.chapter || null,
+        role: "user",
+        message: message,
+      },
+    ]);
+  } catch (err) {
+    console.error("Supabase insert (user) failed:", err);
   }
 
   const prompt = `You are a book writing assistant helping an author brainstorm content for their book.
@@ -39,6 +55,21 @@ ${message}`;
     });
 
     const reply = response.output_text?.trim() || "I wasn't able to generate a response. Please try again.";
+
+    // Save AI response to Supabase
+    try {
+      await supabase.from("messages").insert([
+        {
+          project_id: projectId,
+          chapter_id: body.chapter || null,
+          role: "assistant",
+          message: reply,
+        },
+      ]);
+    } catch (err) {
+      console.error("Supabase insert (assistant) failed:", err);
+    }
+
     return NextResponse.json({ reply });
   } catch (err) {
     console.error("OpenAI request failed:", err);
