@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, use } from "react";
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
 type Stage = (typeof STAGES)[number];
@@ -803,7 +803,8 @@ function DraftPanel({
   );
 }
 
-export default function ProjectPage({ params }: { params: { id: string } }) {
+export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = use(params);
   const [activeStage, setActiveStage] = useState<Stage>("Brainstorming");
   const [activeSection, setActiveSection] = useState<SectionId>("Chapter 1");
   const [chapters, setChapters] = useState<string[]>(["Chapter 1", "Chapter 2", "Chapter 3"]);
@@ -1183,7 +1184,7 @@ export default function ProjectPage({ params }: { params: { id: string } }) {
           ) : activeStage === "Brainstorming" ? (
             <BrainstormingPanel
               chapter={activeSection}
-              projectId={params.id}
+              projectId={projectId}
               messages={(brainstormChats[activeSection] ?? []).find((c) => c.id === activeChatIds[activeSection])?.messages ?? []}
               activeChatId={activeChatIds[activeSection] ?? null}
               compilationItems={compilationItems}
