@@ -166,8 +166,8 @@ function BrainstormingPanel({
   onSendToCompilation,
   onAddMessage,
 }: {
-  chapter: string;
   projectId: string;
+  chapter: string;
   messages: Message[];
   activeChatId: string | null;
   compilationItems: CompilationItem[];
