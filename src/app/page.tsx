@@ -180,10 +180,10 @@ export default function HomePage() {
             <select
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              className="mb-6 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+              className="mb-6 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
             >
               {TYPE_OPTIONS.map((t) => (
-                <option key={t} value={t}>
+                <option key={t} value={t} className="bg-[#1a1a1a] text-white">
                   {t}
                 </option>
               ))}
