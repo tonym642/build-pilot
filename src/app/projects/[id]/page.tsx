@@ -158,8 +158,8 @@ function AiActions({
 }
 
 function BrainstormingPanel({
-  chapter,
   projectId,
+  chapter,
   messages,
   activeChatId,
   compilationItems,
