@@ -205,7 +205,12 @@ function BrainstormingPanel({
       const res = await fetch("/api/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, chapter, bookTitle: "Life Basics 101" }),
+        body: JSON.stringify({
+          message: trimmed,
+          chapter,
+          bookTitle: "Life Basics 101",
+          project_id: params.id,
+        }),
       });
       const data = await res.json();
       onAddMessage(activeChatId, {
@@ -795,7 +800,7 @@ function DraftPanel({
   );
 }
 
-export default function ProjectPage() {
+export default function ProjectPage({ params }: { params: { id: string } }) {
   const [activeStage, setActiveStage] = useState<Stage>("Brainstorming");
   const [activeSection, setActiveSection] = useState<SectionId>("Chapter 1");
   const [chapters, setChapters] = useState<string[]>(["Chapter 1", "Chapter 2", "Chapter 3"]);
