@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, use } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
@@ -807,8 +808,14 @@ function DraftPanel({
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = use(params);
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [projectName, setProjectName] = useState<string>("");
-  const [activeStage, setActiveStage] = useState<Stage>("Brainstorming");
+  const [activeStage, setActiveStage] = useState<Stage>(() => {
+    const stageParam = searchParams.get("stage");
+    if (stageParam && STAGES.includes(stageParam as Stage)) return stageParam as Stage;
+    return "Brainstorming";
+  });
   const [activeSection, setActiveSection] = useState<SectionId>("Chapter 1");
   const [chapters, setChapters] = useState<string[]>(["Chapter 1", "Chapter 2", "Chapter 3"]);
   const [confirmRemoveChapter, setConfirmRemoveChapter] = useState<string | null>(null);
@@ -817,6 +824,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [compilationItems, setCompilationItems] = useState<CompilationItem[]>([]);
   const [draftBlocks, setDraftBlocks] = useState<DraftBlocks>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
+  const [bookStructure, setBookStructure] = useState<{ id: string; type: string; title: string; position: number }[]>([]);
+  const [bookVersions, setBookVersions] = useState<{ id: string; version_number: number; source: string; status: string; created_at: string; derived_status?: string }[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
 
   // Load project record via API
@@ -992,6 +1001,37 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftBlocks]);
+
+  // Load book structure from Supabase on mount, repair ordering
+  useEffect(() => {
+    if (!projectId) return;
+    // Repair positions first, then load
+    fetch(`/api/projects/${projectId}/structure`, { method: "PATCH" })
+      .then(() => fetch(`/api/projects/${projectId}/structure`))
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const sorted = [...data].sort(
+            (a: { position?: number }, b: { position?: number }) =>
+              (a.position ?? 0) - (b.position ?? 0)
+          );
+          setBookStructure(sorted);
+        }
+      });
+  }, [projectId]);
+
+  // Load book versions from Supabase on mount
+  useEffect(() => {
+    if (!projectId) return;
+    loadBookVersions();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+
+  async function loadBookVersions() {
+    const res = await fetch(`/api/projects/${projectId}/versions`);
+    const data = await res.json();
+    if (Array.isArray(data)) setBookVersions(data);
+  }
 
   // Auto-create or restore chat when entering Brainstorming for a section
   useEffect(() => {
@@ -1205,6 +1245,69 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     });
   }
 
+  async function loadBookStructure() {
+    const res = await fetch(`/api/projects/${projectId}/structure`);
+    const data = await res.json();
+    if (Array.isArray(data)) {
+      const sorted = [...data].sort(
+        (a: { position?: number }, b: { position?: number }) =>
+          (a.position ?? 0) - (b.position ?? 0)
+      );
+      setBookStructure(sorted);
+    }
+  }
+
+  async function handleAddStructureChapter() {
+    const res = await fetch(`/api/projects/${projectId}/structure`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "chapter" }),
+    });
+    if (res.ok) {
+      await loadBookStructure();
+    }
+  }
+
+  const [sendingToBook, setSendingToBook] = useState(false);
+  const [sendToBookSuccess, setSendToBookSuccess] = useState(false);
+
+  async function handleSendToBook() {
+    setSendingToBook(true);
+    setSendToBookSuccess(false);
+
+    // Gather all manuscript sections in order (exclude book_info — internal only)
+    const orderedSections = ["prologue", ...chapters, "epilogue"];
+    const sections: { section_type: string; section_title: string; position: number; content: string }[] = [];
+    let position = 0;
+
+    for (const s of orderedSections) {
+      const blocks = draftBlocks[s] ?? [];
+      if (blocks.length > 0) {
+        const type = s === "prologue" ? "prologue" : s === "epilogue" ? "epilogue" : "chapter";
+        sections.push({
+          section_type: type,
+          section_title: sectionLabel(s),
+          position: position++,
+          content: blocks.map((b) => b.content).join("\n\n"),
+        });
+      }
+    }
+
+    const res = await fetch(`/api/projects/${projectId}/versions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sections }),
+    });
+
+    if (res.ok) {
+      setSendToBookSuccess(true);
+      await loadBookVersions();
+      setTimeout(() => setSendToBookSuccess(false), 3000);
+    }
+
+    setSendingToBook(false);
+  }
+
   function handleConfirmRemoveChapter(chapter: string) {
     const remaining = chapters.filter((c) => c !== chapter);
     setChapters(remaining);
@@ -1242,7 +1345,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar — editing nav for writing stages, reader nav for Manuscript/Book */}
         {activeStage !== "Manuscript" && activeStage !== "Book" ? (
-        <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
+        <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto" key="edit-sidebar">
           {/* Book identity */}
           <div className="mb-4 px-2">
             <p className="text-sm font-semibold tracking-tight text-white/90">{projectName || bookInfo.title || "Untitled Project"}</p>
@@ -1340,7 +1443,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </button>
           </nav>
         </aside>
-        ) : (
+        ) : activeStage === "Manuscript" ? (
         <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
           {/* Book identity */}
           <div className="mb-4 px-2">
@@ -1371,7 +1474,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             )}
           </nav>
         </aside>
-        )}
+        ) : null}
 
         {/* Main content */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -1412,6 +1515,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           ) : activeStage === "Manuscript" ? (
             <div className="overflow-y-auto h-full">
               <div className="mx-auto max-w-3xl px-4 py-10">
+                <div className="flex items-center justify-between mb-8">
+                  <h2 className="text-2xl font-semibold">Manuscript</h2>
+                  <div className="flex items-center gap-3">
+                    {sendToBookSuccess && (
+                      <span className="text-sm text-green-400">Snapshot saved!</span>
+                    )}
+                    <button
+                      onClick={handleSendToBook}
+                      disabled={sendingToBook}
+                      className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:opacity-40"
+                    >
+                      {sendingToBook ? "Saving..." : "Send to Book"}
+                    </button>
+                  </div>
+                </div>
                 {(["prologue", ...chapters, "epilogue"])
                   .filter((s) => (draftBlocks[s] ?? []).length > 0)
                   .map((s) => (
@@ -1442,13 +1560,90 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 )}
               </div>
             </div>
+          ) : activeStage === "Book" ? (
+            <div className="overflow-y-auto h-full px-8 py-10">
+              <h2 className="text-2xl font-semibold tracking-tight mb-1">Book Versions</h2>
+              <p className="text-sm text-white/40 mb-6">Snapshots of your manuscript</p>
+              {bookVersions.length === 0 ? (
+                <p className="text-sm text-white/30">
+                  No versions yet. Use &ldquo;Send to Book&rdquo; from the Manuscript stage to create a snapshot.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-medium uppercase tracking-widest text-white/30">
+                      <th className="pb-3 pr-1 font-medium w-10"></th>
+                      <th className="pb-3 pr-1 font-medium w-10"></th>
+                      <th className="pb-3 pr-6 font-medium">Version</th>
+                      <th className="pb-3 pr-6 font-medium">Date</th>
+                      <th className="pb-3 pr-6 font-medium">Source</th>
+                      <th className="pb-3 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/[0.06]">
+                    {bookVersions.map((v) => {
+                      const ds = v.derived_status ?? v.status;
+                      const statusLabel = ds === "finalized" ? "Finalized" : ds === "in_progress" ? "In Progress" : "Pending";
+                      const statusColor = ds === "finalized" ? "text-green-400" : ds === "in_progress" ? "text-yellow-400" : "text-red-400/60";
+                      return (
+                      <tr
+                        key={v.id}
+                        className="group transition-colors hover:bg-white/[0.03]"
+                      >
+                        <td className="py-3.5 pr-1 w-10">
+                          <button
+                            onClick={() => router.push(`/projects/${projectId}/book/${v.id}`)}
+                            className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                            title="Final Edit"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                        </td>
+                        <td className="py-3.5 pr-1 w-10">
+                          <button
+                            onClick={() => console.log("Print PDF - version:", v.id)}
+                            className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                            title="Print PDF"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 9V2h12v7" />
+                              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                              <rect x="6" y="14" width="12" height="8" />
+                            </svg>
+                          </button>
+                        </td>
+                        <td className="py-3.5 pr-6 font-medium text-white/90">
+                          Version {v.version_number}
+                        </td>
+                        <td className="py-3.5 pr-6 text-white/50">
+                          {new Date(v.created_at).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="py-3.5 pr-6 text-white/50 capitalize">
+                          {v.source} snapshot
+                        </td>
+                        <td className="py-3.5">
+                          <span className={`text-lg ${statusColor}`} title={statusLabel}>&#9679;</span>
+                        </td>
+                      </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
           ) : (
             <div className="overflow-y-auto h-full px-8 py-6">
-              <p className="text-xs uppercase tracking-widest text-white/25">
-                {activeStage.toUpperCase()} &mdash; {activeSection.toUpperCase()}
-              </p>
-              <p className="mt-6 text-sm text-white/30">
-                Content for {activeSection} in {activeStage} will appear here.
+              <p className="text-sm text-white/30">
+                Select a stage above.
               </p>
             </div>
           )}

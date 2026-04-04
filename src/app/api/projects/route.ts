@@ -76,5 +76,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Create default book structure for Book projects
+  if (type === "Book" && data) {
+    const structure = [
+      { project_id: data.id, type: "info", title: "Book Info", position: 0 },
+      { project_id: data.id, type: "prologue", title: "Prologue", position: 1 },
+      { project_id: data.id, type: "chapter", title: "Chapter 1", position: 2 },
+      { project_id: data.id, type: "epilogue", title: "Epilogue", position: 3 },
+    ];
+    console.log("Creating book structure for project:", data.id);
+    console.log("Structure payload:", structure);
+
+    const { error: structureError } = await supabase
+      .from("book_structure")
+      .insert(structure);
+
+    if (structureError) {
+      console.log("book_structure insert error:", structureError);
+    } else {
+      console.log("book_structure created successfully");
+    }
+  }
+
   return NextResponse.json(data, { status: 201 });
 }
