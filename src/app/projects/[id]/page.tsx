@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import AppMode from "./app-mode";
 
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
@@ -811,6 +812,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
   const searchParams = useSearchParams();
   const [projectName, setProjectName] = useState<string>("");
+  const [projectType, setProjectType] = useState<string>("Book");
   const [activeStage, setActiveStage] = useState<Stage>(() => {
     const stageParam = searchParams.get("stage");
     if (stageParam && STAGES.includes(stageParam as Stage)) return stageParam as Stage;
@@ -836,6 +838,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       .then((data) => {
         if (data && data.id) {
           setProjectName(data.name ?? "");
+          if (data.type) setProjectType(data.type);
           if (data.book_info) {
             setBookInfo({ ...EMPTY_BOOK_INFO, ...data.book_info });
           }
@@ -1320,6 +1323,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   }
 
   const [isChaptersOpen, setIsChaptersOpen] = useState(true);
+
+  // Render App mode for App projects
+  if (projectType === "App") {
+    return <AppMode projectId={projectId} projectName={projectName} />;
+  }
 
   return (
     <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>

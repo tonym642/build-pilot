@@ -1,0 +1,1101 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback } from "react";
+
+/* ─── types ──────────────────────────────────────────────────────── */
+
+type AppInfo = {
+  appName: string;
+  tagline: string;
+  purpose: string;
+  targetUser: string;
+  problemSolved: string;
+  appType: string;
+  platform: string;
+  businessModel: string;
+  status: string;
+};
+
+const EMPTY_APP_INFO: AppInfo = {
+  appName: "",
+  tagline: "",
+  purpose: "",
+  targetUser: "",
+  problemSolved: "",
+  appType: "",
+  platform: "",
+  businessModel: "",
+  status: "",
+};
+
+type Screen = {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type Section = {
+  id: string;
+  screenId: string;
+  name: string;
+  brainstorm: string;
+  committed: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type Feature = {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ConceptData = {
+  brainstorm: string;
+  committed: string;
+};
+
+type BuildPlanData = {
+  content: string;
+};
+
+type AppData = {
+  appInfo: AppInfo;
+  concept: ConceptData;
+  screens: Screen[];
+  sections: Section[];
+  features: Feature[];
+  buildPlan: BuildPlanData;
+};
+
+const EMPTY_APP_DATA: AppData = {
+  appInfo: EMPTY_APP_INFO,
+  concept: { brainstorm: "", committed: "" },
+  screens: [],
+  sections: [],
+  features: [],
+  buildPlan: { content: "" },
+};
+
+/* ─── top-level pages ────────────────────────────────────────────── */
+
+const PAGES = ["App Info", "Concept", "Screens", "Features", "Build Plan"] as const;
+type PageId = (typeof PAGES)[number];
+
+/* ─── view stack for drill-down ──────────────────────────────────── */
+
+type ViewState =
+  | { page: "App Info" }
+  | { page: "Concept" }
+  | { page: "Screens"; screenId?: undefined }
+  | { page: "Screens"; screenId: string; sectionId?: undefined }
+  | { page: "Screens"; screenId: string; sectionId: string }
+  | { page: "Features"; featureId?: string }
+  | { page: "Build Plan" };
+
+/* ─── sub-components ─────────────────────────────────────────────── */
+
+function AppInfoPanel({
+  appInfo,
+  onChange,
+}: {
+  appInfo: AppInfo;
+  onChange: (updated: AppInfo) => void;
+}) {
+  const fields: { key: keyof AppInfo; label: string; multiline?: boolean; placeholder?: string }[] = [
+    { key: "appName", label: "App Name", placeholder: "e.g. TaskFlow" },
+    { key: "tagline", label: "Tagline", placeholder: "e.g. Work smarter, not harder" },
+    { key: "purpose", label: "One-Line Purpose", placeholder: "A single sentence describing what the app does" },
+    { key: "targetUser", label: "Target User", placeholder: "e.g. Freelancers managing multiple clients" },
+    { key: "problemSolved", label: "Main Problem Solved", multiline: true, placeholder: "What pain point does this app eliminate?" },
+    { key: "appType", label: "App Type", placeholder: "e.g. SaaS, Mobile App, Marketplace" },
+    { key: "platform", label: "Platform", placeholder: "e.g. Web, iOS, Android, Cross-platform" },
+    { key: "businessModel", label: "Business Model", placeholder: "e.g. Freemium, Subscription, One-time purchase" },
+    { key: "status", label: "Status", placeholder: "e.g. Idea, Prototyping, In Development, Launched" },
+  ];
+
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="px-8 py-8 max-w-2xl">
+        <h2 className="text-lg font-medium tracking-tight">
+          <span className="text-white">App Info</span>
+        </h2>
+        <p className="mt-1 text-xs text-white/35">Core details about your app — keep it sharp.</p>
+        <div className="mt-7 flex flex-col gap-6">
+          {fields.map(({ key, label, multiline, placeholder }) => (
+            <div key={key}>
+              <label className="mb-1.5 block text-xs font-medium uppercase tracking-widest text-white/35">
+                {label}
+              </label>
+              {multiline ? (
+                <textarea
+                  rows={3}
+                  value={appInfo[key]}
+                  onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
+                  placeholder={placeholder}
+                  className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={appInfo[key]}
+                  onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
+                  placeholder={placeholder}
+                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+                />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConceptPanel({
+  concept,
+  onChange,
+}: {
+  concept: ConceptData;
+  onChange: (updated: ConceptData) => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0">
+      {/* Left: brainstorm */}
+      <div className="flex flex-1 flex-col border-r border-white/[0.07] min-h-0">
+        <div className="shrink-0 px-6 pt-6 pb-3">
+          <h3 className="text-sm font-medium text-white/60">Working Ideas</h3>
+          <p className="mt-0.5 text-xs text-white/25">Brain dump — nothing is final here.</p>
+        </div>
+        <div className="flex-1 min-h-0 px-6 pb-6">
+          <textarea
+            value={concept.brainstorm}
+            onChange={(e) => onChange({ ...concept, brainstorm: e.target.value })}
+            placeholder="Write freely about your app concept, user flows, ideas, comparisons..."
+            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+          />
+        </div>
+      </div>
+      {/* Right: committed */}
+      <div className="flex flex-1 flex-col min-h-0">
+        <div className="shrink-0 px-6 pt-6 pb-3">
+          <h3 className="text-sm font-medium text-white/60">Locked-In Concept</h3>
+          <p className="mt-0.5 text-xs text-white/25">The version you&rsquo;re building toward.</p>
+        </div>
+        <div className="flex-1 min-h-0 px-6 pb-6">
+          <textarea
+            value={concept.committed}
+            onChange={(e) => onChange({ ...concept, committed: e.target.value })}
+            placeholder="Write your committed app concept here..."
+            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScreensListPanel({
+  screens,
+  onAdd,
+  onRename,
+  onDelete,
+  onOpen,
+}: {
+  screens: Screen[];
+  onAdd: () => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  function startRename(screen: Screen) {
+    setEditingId(screen.id);
+    setEditValue(screen.name);
+  }
+
+  function commitRename() {
+    if (editingId && editValue.trim()) {
+      onRename(editingId, editValue.trim());
+    }
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="px-8 py-8 max-w-3xl">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-medium tracking-tight text-white">Screens</h2>
+            <p className="mt-1 text-xs text-white/35">All screens in your app.</p>
+          </div>
+          <button
+            onClick={onAdd}
+            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+          >
+            + Add Screen
+          </button>
+        </div>
+
+        {screens.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-white/40">No screens yet.</p>
+            <button
+              onClick={onAdd}
+              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+            >
+              Create your first screen
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {screens.map((screen) => (
+              <div
+                key={screen.id}
+                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+              >
+                {editingId === screen.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
+                    }}
+                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => onOpen(screen.id)}
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                  >
+                    {screen.name}
+                  </button>
+                )}
+                <div className="flex items-center gap-1 pr-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => startRename(screen)}
+                    title="Rename"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(screen.id)}
+                    title="Delete"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-white">Delete screen?</h2>
+            <p className="mt-2 text-sm text-white/50">
+              This screen and all its sections will be permanently removed.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { onDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScreenDetailPanel({
+  screen,
+  sections,
+  onAddSection,
+  onRenameSection,
+  onDeleteSection,
+  onOpenSection,
+  onBack,
+}: {
+  screen: Screen;
+  sections: Section[];
+  onAddSection: () => void;
+  onRenameSection: (id: string, name: string) => void;
+  onDeleteSection: (id: string) => void;
+  onOpenSection: (id: string) => void;
+  onBack: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  function startRename(section: Section) {
+    setEditingId(section.id);
+    setEditValue(section.name);
+  }
+
+  function commitRename() {
+    if (editingId && editValue.trim()) {
+      onRenameSection(editingId, editValue.trim());
+    }
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="px-8 py-8 max-w-3xl">
+        {/* Breadcrumb */}
+        <div className="mb-5 flex items-center gap-1.5 text-xs text-white/35">
+          <button onClick={onBack} className="hover:text-white/60 transition-colors">Screens</button>
+          <span>/</span>
+          <span className="text-white/60">{screen.name}</span>
+        </div>
+
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-medium tracking-tight text-white">{screen.name}</h2>
+          <button
+            onClick={onAddSection}
+            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+          >
+            + Add Section
+          </button>
+        </div>
+
+        {sections.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-white/40">No sections yet.</p>
+            <button
+              onClick={onAddSection}
+              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+            >
+              Add the first section
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {sections.map((section) => (
+              <div
+                key={section.id}
+                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+              >
+                {editingId === section.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
+                    }}
+                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => onOpenSection(section.id)}
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                  >
+                    {section.name}
+                  </button>
+                )}
+                <div className="flex items-center gap-1 pr-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => startRename(section)}
+                    title="Rename"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(section.id)}
+                    title="Delete"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-white">Delete section?</h2>
+            <p className="mt-2 text-sm text-white/50">
+              This section and its content will be permanently removed.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { onDeleteSection(confirmDeleteId); setConfirmDeleteId(null); }}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionDetailPanel({
+  section,
+  screenName,
+  onChange,
+  onBack,
+}: {
+  section: Section;
+  screenName: string;
+  onChange: (updated: Section) => void;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      {/* Breadcrumb */}
+      <div className="shrink-0 px-8 pt-6 pb-3">
+        <div className="flex items-center gap-1.5 text-xs text-white/35">
+          <button onClick={onBack} className="hover:text-white/60 transition-colors">Screens</button>
+          <span>/</span>
+          <button onClick={onBack} className="hover:text-white/60 transition-colors">{screenName}</button>
+          <span>/</span>
+          <span className="text-white/60">{section.name}</span>
+        </div>
+      </div>
+
+      {/* Two-panel workspace */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left: brainstorm */}
+        <div className="flex flex-1 flex-col border-r border-white/[0.07] min-h-0">
+          <div className="shrink-0 px-6 pt-3 pb-3">
+            <h3 className="text-sm font-medium text-white/60">Working Ideas</h3>
+            <p className="mt-0.5 text-xs text-white/25">Explore ideas for this section freely.</p>
+          </div>
+          <div className="flex-1 min-h-0 px-6 pb-6">
+            <textarea
+              value={section.brainstorm}
+              onChange={(e) => onChange({ ...section, brainstorm: e.target.value })}
+              placeholder="Brainstorm layout, components, behavior, copy..."
+              className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+            />
+          </div>
+        </div>
+        {/* Right: committed */}
+        <div className="flex flex-1 flex-col min-h-0">
+          <div className="shrink-0 px-6 pt-3 pb-3">
+            <h3 className="text-sm font-medium text-white/60">Committed Design</h3>
+            <p className="mt-0.5 text-xs text-white/25">The finalized spec for this section.</p>
+          </div>
+          <div className="flex-1 min-h-0 px-6 pb-6">
+            <textarea
+              value={section.committed}
+              onChange={(e) => onChange({ ...section, committed: e.target.value })}
+              placeholder="Write the locked-in design for this section..."
+              className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeaturesPanel({
+  features,
+  onAdd,
+  onRename,
+  onDelete,
+  onOpen,
+  activeFeatureId,
+  onUpdateDescription,
+  onBack,
+}: {
+  features: Feature[];
+  onAdd: () => void;
+  onRename: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+  onOpen: (id: string) => void;
+  activeFeatureId?: string;
+  onUpdateDescription: (id: string, description: string) => void;
+  onBack: () => void;
+}) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const activeFeature = activeFeatureId
+    ? features.find((f) => f.id === activeFeatureId)
+    : null;
+
+  function startRename(feature: Feature) {
+    setEditingId(feature.id);
+    setEditValue(feature.name);
+  }
+
+  function commitRename() {
+    if (editingId && editValue.trim()) {
+      onRename(editingId, editValue.trim());
+    }
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  if (activeFeature) {
+    return (
+      <div className="flex flex-col h-full min-h-0">
+        <div className="shrink-0 px-8 pt-6 pb-3">
+          <div className="flex items-center gap-1.5 text-xs text-white/35">
+            <button onClick={onBack} className="hover:text-white/60 transition-colors">Features</button>
+            <span>/</span>
+            <span className="text-white/60">{activeFeature.name}</span>
+          </div>
+        </div>
+        <div className="flex-1 min-h-0 px-8 pb-6">
+          <textarea
+            value={activeFeature.description}
+            onChange={(e) => onUpdateDescription(activeFeature.id, e.target.value)}
+            placeholder="Describe this feature — what it does, how it works, edge cases, dependencies..."
+            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-y-auto h-full">
+      <div className="px-8 py-8 max-w-3xl">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-medium tracking-tight text-white">Features</h2>
+            <p className="mt-1 text-xs text-white/35">App-wide capabilities and functionality.</p>
+          </div>
+          <button
+            onClick={onAdd}
+            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+          >
+            + Add Feature
+          </button>
+        </div>
+
+        {features.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-white/40">No features yet.</p>
+            <button
+              onClick={onAdd}
+              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+            >
+              Add your first feature
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {features.map((feature) => (
+              <div
+                key={feature.id}
+                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+              >
+                {editingId === feature.id ? (
+                  <input
+                    autoFocus
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={commitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitRename();
+                      if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
+                    }}
+                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => onOpen(feature.id)}
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                  >
+                    {feature.name}
+                  </button>
+                )}
+                <div className="flex items-center gap-1 pr-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => startRename(feature)}
+                    title="Rename"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setConfirmDeleteId(feature.id)}
+                    title="Delete"
+                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm delete modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-white">Delete feature?</h2>
+            <p className="mt-2 text-sm text-white/50">
+              This feature will be permanently removed.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { onDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BuildPlanPanel({
+  buildPlan,
+  onChange,
+}: {
+  buildPlan: BuildPlanData;
+  onChange: (updated: BuildPlanData) => void;
+}) {
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      <div className="shrink-0 px-8 pt-8 pb-3">
+        <h2 className="text-lg font-medium tracking-tight text-white">Build Plan</h2>
+        <p className="mt-1 text-xs text-white/35">Approved milestones, phases, and priorities for development.</p>
+      </div>
+      <div className="flex-1 min-h-0 px-8 pb-8">
+        <textarea
+          value={buildPlan.content}
+          onChange={(e) => onChange({ content: e.target.value })}
+          placeholder="Outline your build plan — phases, milestones, priorities, dependencies..."
+          className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ─── main component ─────────────────────────────────────────────── */
+
+export default function AppMode({
+  projectId,
+  projectName,
+}: {
+  projectId: string;
+  projectName: string;
+}) {
+  const [appData, setAppData] = useState<AppData>(EMPTY_APP_DATA);
+  const [view, setView] = useState<ViewState>({ page: "App Info" });
+  const [loaded, setLoaded] = useState(false);
+
+  // Current page for tab highlighting
+  const currentPage: PageId = view.page;
+
+  // ─── Load app data from project.book_info.app_data
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.book_info?.app_data) {
+          setAppData({ ...EMPTY_APP_DATA, ...data.book_info.app_data });
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [projectId]);
+
+  // ─── Auto-save (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      return;
+    }
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      // We need to get the current book_info and merge app_data into it
+      fetch(`/api/projects/${projectId}`)
+        .then((res) => res.json())
+        .then((existing) => {
+          const bookInfo = existing?.book_info ?? {};
+          fetch("/api/projects", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: projectId,
+              book_info: { ...bookInfo, app_data: appData },
+            }),
+          });
+        });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appData]);
+
+  // ─── Helpers
+  const now = () => new Date().toISOString();
+
+  const updateAppData = useCallback((partial: Partial<AppData>) => {
+    setAppData((prev) => ({ ...prev, ...partial }));
+  }, []);
+
+  // ─── Screen CRUD
+  function addScreen() {
+    const count = appData.screens.length;
+    const screen: Screen = {
+      id: crypto.randomUUID(),
+      name: `Screen ${count + 1}`,
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    updateAppData({ screens: [...appData.screens, screen] });
+  }
+
+  function renameScreen(id: string, name: string) {
+    updateAppData({
+      screens: appData.screens.map((s) =>
+        s.id === id ? { ...s, name, updatedAt: now() } : s
+      ),
+    });
+  }
+
+  function deleteScreen(id: string) {
+    updateAppData({
+      screens: appData.screens.filter((s) => s.id !== id),
+      sections: appData.sections.filter((s) => s.screenId !== id),
+    });
+  }
+
+  // ─── Section CRUD
+  function addSection(screenId: string) {
+    const screenSections = appData.sections.filter((s) => s.screenId === screenId);
+    const section: Section = {
+      id: crypto.randomUUID(),
+      screenId,
+      name: `Section ${screenSections.length + 1}`,
+      brainstorm: "",
+      committed: "",
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    updateAppData({ sections: [...appData.sections, section] });
+  }
+
+  function renameSection(id: string, name: string) {
+    updateAppData({
+      sections: appData.sections.map((s) =>
+        s.id === id ? { ...s, name, updatedAt: now() } : s
+      ),
+    });
+  }
+
+  function deleteSection(id: string) {
+    updateAppData({
+      sections: appData.sections.filter((s) => s.id !== id),
+    });
+  }
+
+  function updateSection(updated: Section) {
+    updateAppData({
+      sections: appData.sections.map((s) =>
+        s.id === updated.id ? { ...updated, updatedAt: now() } : s
+      ),
+    });
+  }
+
+  // ─── Feature CRUD
+  function addFeature() {
+    const count = appData.features.length;
+    const feature: Feature = {
+      id: crypto.randomUUID(),
+      name: `Feature ${count + 1}`,
+      description: "",
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    updateAppData({ features: [...appData.features, feature] });
+  }
+
+  function renameFeature(id: string, name: string) {
+    updateAppData({
+      features: appData.features.map((f) =>
+        f.id === id ? { ...f, name, updatedAt: now() } : f
+      ),
+    });
+  }
+
+  function deleteFeature(id: string) {
+    updateAppData({
+      features: appData.features.filter((f) => f.id !== id),
+    });
+    if (view.page === "Features" && "featureId" in view && view.featureId === id) {
+      setView({ page: "Features" });
+    }
+  }
+
+  function updateFeatureDescription(id: string, description: string) {
+    updateAppData({
+      features: appData.features.map((f) =>
+        f.id === id ? { ...f, description, updatedAt: now() } : f
+      ),
+    });
+  }
+
+  // ─── Navigation helpers
+  function navigateToPage(page: PageId) {
+    if (page === "Screens") {
+      setView({ page: "Screens" });
+    } else if (page === "Features") {
+      setView({ page: "Features" });
+    } else {
+      setView({ page });
+    }
+  }
+
+  // ─── Sidebar content for Screens drill-down
+  function renderSidebar() {
+    // Only show sidebar when inside a screen or section
+    if (view.page !== "Screens" || !view.screenId) return null;
+
+    const screen = appData.screens.find((s) => s.id === view.screenId);
+    if (!screen) return null;
+    const screenSections = appData.sections.filter((s) => s.screenId === view.screenId);
+
+    return (
+      <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
+        <div className="mb-4 px-2">
+          <p className="text-sm font-semibold tracking-tight text-white/90">{screen.name}</p>
+          <p className="mt-0.5 text-xs text-white/35">{screenSections.length} section{screenSections.length !== 1 ? "s" : ""}</p>
+        </div>
+        <div className="mb-4 border-t border-white/[0.07]" />
+        <nav className="flex flex-col gap-0.5 text-sm">
+          <button
+            onClick={() => setView({ page: "Screens", screenId: view.screenId })}
+            className={[
+              "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+              !("sectionId" in view) || !view.sectionId
+                ? "bg-white/[0.08] text-white"
+                : "text-white/50 hover:text-white/80",
+            ].join(" ")}
+          >
+            Overview
+          </button>
+          {screenSections.map((section) => (
+            <button
+              key={section.id}
+              onClick={() => setView({ page: "Screens", screenId: view.screenId!, sectionId: section.id })}
+              className={[
+                "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "sectionId" in view && view.sectionId === section.id
+                  ? "bg-white/[0.08] text-white"
+                  : "text-white/50 hover:text-white/80",
+              ].join(" ")}
+            >
+              {section.name}
+            </button>
+          ))}
+        </nav>
+      </aside>
+    );
+  }
+
+  // ─── Main content
+  function renderContent() {
+    if (view.page === "App Info") {
+      return (
+        <AppInfoPanel
+          appInfo={appData.appInfo}
+          onChange={(updated) => updateAppData({ appInfo: updated })}
+        />
+      );
+    }
+
+    if (view.page === "Concept") {
+      return (
+        <ConceptPanel
+          concept={appData.concept}
+          onChange={(updated) => updateAppData({ concept: updated })}
+        />
+      );
+    }
+
+    if (view.page === "Screens") {
+      // Section detail
+      if ("sectionId" in view && view.sectionId) {
+        const section = appData.sections.find((s) => s.id === view.sectionId);
+        const screen = appData.screens.find((s) => s.id === view.screenId);
+        if (section && screen) {
+          return (
+            <SectionDetailPanel
+              section={section}
+              screenName={screen.name}
+              onChange={updateSection}
+              onBack={() => setView({ page: "Screens", screenId: view.screenId! })}
+            />
+          );
+        }
+      }
+
+      // Screen detail
+      if (view.screenId) {
+        const screen = appData.screens.find((s) => s.id === view.screenId);
+        if (screen) {
+          const screenSections = appData.sections.filter((s) => s.screenId === view.screenId);
+          return (
+            <ScreenDetailPanel
+              screen={screen}
+              sections={screenSections}
+              onAddSection={() => addSection(view.screenId!)}
+              onRenameSection={renameSection}
+              onDeleteSection={deleteSection}
+              onOpenSection={(id) => setView({ page: "Screens", screenId: view.screenId!, sectionId: id })}
+              onBack={() => setView({ page: "Screens" })}
+            />
+          );
+        }
+      }
+
+      // Screens list
+      return (
+        <ScreensListPanel
+          screens={appData.screens}
+          onAdd={addScreen}
+          onRename={renameScreen}
+          onDelete={deleteScreen}
+          onOpen={(id) => setView({ page: "Screens", screenId: id })}
+        />
+      );
+    }
+
+    if (view.page === "Features") {
+      return (
+        <FeaturesPanel
+          features={appData.features}
+          onAdd={addFeature}
+          onRename={renameFeature}
+          onDelete={deleteFeature}
+          onOpen={(id) => setView({ page: "Features", featureId: id })}
+          activeFeatureId={"featureId" in view ? view.featureId : undefined}
+          onUpdateDescription={updateFeatureDescription}
+          onBack={() => setView({ page: "Features" })}
+        />
+      );
+    }
+
+    if (view.page === "Build Plan") {
+      return (
+        <BuildPlanPanel
+          buildPlan={appData.buildPlan}
+          onChange={(updated) => updateAppData({ buildPlan: updated })}
+        />
+      );
+    }
+
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
+      {/* Page navigation tabs */}
+      <div className="flex shrink-0 gap-1 border-b border-white/[0.07] px-8 pb-3">
+        {PAGES.map((page) => (
+          <button
+            key={page}
+            onClick={() => navigateToPage(page)}
+            className={[
+              "rounded-t px-3 pb-3.5 pt-3 text-sm transition-colors",
+              currentPage === page
+                ? "border-b-2 border-white font-medium text-white"
+                : "text-white/35 hover:bg-white/[0.04] hover:text-white/65",
+            ].join(" ")}
+          >
+            {page}
+          </button>
+        ))}
+      </div>
+
+      {/* Body: optional sidebar + content */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {renderSidebar()}
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
+          {renderContent()}
+        </div>
+      </div>
+    </div>
+  );
+}
