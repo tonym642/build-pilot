@@ -165,7 +165,7 @@ export default function HomePage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs font-medium uppercase tracking-widest text-white/30">
-              <th className="pb-3 pr-6 font-medium">Name</th>
+              <th className="pb-3 pl-4 pr-6 font-medium">Name</th>
               <th className="pb-3 pr-6 font-medium">Type</th>
               <th className="pb-3 pr-6 font-medium">Updated</th>
               <th className="pb-3 font-medium"></th>
@@ -177,7 +177,7 @@ export default function HomePage() {
                 key={project.id}
                 className="group cursor-pointer transition-colors hover:bg-white/[0.03]"
               >
-                <td className="py-3.5 pr-6 font-medium text-white/90">
+                <td className="py-3.5 pl-4 pr-6 font-medium text-white/90">
                   <Link
                     href={`/projects/${project.id}`}
                     className="transition-colors hover:text-white"
