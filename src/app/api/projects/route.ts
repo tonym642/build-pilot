@@ -33,6 +33,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   const updates: Record<string, unknown> = {};
+  if (typeof body.name === "string" && body.name.trim()) updates.name = body.name.trim();
+  if (typeof body.type === "string" && body.type.trim()) updates.type = body.type.trim();
   if (typeof body.archived === "boolean") updates.archived = body.archived;
   if (body.book_info && typeof body.book_info === "object") updates.book_info = body.book_info;
 

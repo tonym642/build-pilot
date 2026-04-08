@@ -1,13 +1,53 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
-const TABS = ["All", "Books", "Apps", "Businesses", "Songs"] as const;
-type Tab = (typeof TABS)[number];
+const TYPE_OPTIONS = ["Book", "App", "Business", "Music"] as const;
 
-const TYPE_OPTIONS = ["Book", "App", "Business", "Songs"] as const;
+const FILTER_MAP: Record<string, string> = {
+  Books: "Book",
+  Apps: "App",
+  Businesses: "Business",
+  Music: "Music",
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  App: "#8b7cf5",
+  Book: "#4ade80",
+  Business: "#fbbf24",
+  Music: "#5a9af5",
+};
+
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  App: (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="4" height="4" rx="1" />
+      <rect x="8" y="2" width="4" height="4" rx="1" />
+      <rect x="2" y="8" width="4" height="4" rx="1" />
+      <rect x="8" y="8" width="4" height="4" rx="1" />
+    </svg>
+  ),
+  Book: (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 2.5A1.5 1.5 0 013.5 1H5a1 1 0 011 1v10a1 1 0 01-1 1H3.5A1.5 1.5 0 012 11.5V2.5z" />
+      <path d="M6 2h4.5A1.5 1.5 0 0112 3.5v8a1.5 1.5 0 01-1.5 1.5H6V2z" />
+    </svg>
+  ),
+  Business: (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="7,1.5 8.5,5 12.5,5.3 9.5,7.8 10.4,11.8 7,9.6 3.6,11.8 4.5,7.8 1.5,5.3 5.5,5" />
+    </svg>
+  ),
+  Music: (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="4.5" cy="10.5" r="2" />
+      <path d="M6.5 10.5V3l5-1.5v8" />
+      <circle cx="9.5" cy="9.5" r="2" />
+    </svg>
+  ),
+};
 
 type Project = {
   id: string;
@@ -19,8 +59,18 @@ type Project = {
 };
 
 export default function HomePage() {
+  return (
+    <Suspense>
+      <HomePageContent />
+    </Suspense>
+  );
+}
+
+function HomePageContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("All");
+  const searchParams = useSearchParams();
+  const activeFilter = searchParams.get("filter") ?? "All";
+
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -47,11 +97,12 @@ export default function HomePage() {
   }, [showArchived]);
 
   const filtered =
-    activeTab === "All"
+    activeFilter === "All"
       ? projects
-      : projects.filter(
-          (p) => p.type === activeTab.slice(0, -1) || p.type === activeTab
-        );
+      : projects.filter((p) => {
+          const matchType = FILTER_MAP[activeFilter];
+          return matchType ? p.type === matchType : p.type === activeFilter;
+        });
 
   const [error, setError] = useState<string | null>(null);
 
@@ -109,123 +160,226 @@ export default function HomePage() {
     });
   }
 
+  const heading =
+    showArchived
+      ? "Archived Projects"
+      : activeFilter === "All"
+      ? "Projects"
+      : activeFilter;
+
   return (
-    <div className="px-8 py-10">
+    <div style={{ padding: "24px 32px" }}>
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {showArchived ? "Archived Projects" : "Projects"}
+          <h1 className="text-base font-semibold" style={{ letterSpacing: "-0.01em", color: "var(--text-primary)" }}>
+            {heading}
           </h1>
-          <p className="mt-1 text-sm text-white/40">Manage your builds</p>
+          <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Manage your builds</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+          className="text-xs font-semibold text-white whitespace-nowrap"
+          style={{
+            height: 30,
+            padding: "0 12px",
+            background: "linear-gradient(180deg, #5a9af5, #4a88e0)",
+            border: "none",
+            borderRadius: 6,
+          }}
         >
           + New Project
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="mb-6 flex gap-1 border-b border-white/[0.07] pb-3">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={[
-              "rounded-t px-3 pb-3 pt-2 text-sm transition-colors",
-              activeTab === tab
-                ? "border-b-2 border-white font-medium text-white"
-                : "text-white/35 hover:bg-white/[0.04] hover:text-white/65",
-            ].join(" ")}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
+      {/* Projects card */}
       {loadError && (
-        <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{loadError}</p>
+        <p className="mb-4 text-xs" style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: "7px 10px", borderRadius: 6 }}>{loadError}</p>
       )}
-      {loading ? (
-        <p className="text-sm text-white/40">Loading projects…</p>
-      ) : projects.length === 0 && !loadError ? (
-        <div className="py-16 text-center">
-          <p className="text-white/40">No projects yet.</p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+      <div
+        style={{
+          background: "var(--surface-2)",
+          border: "1px solid var(--border-subtle)",
+          borderRadius: 10,
+          overflow: "hidden",
+        }}
+      >
+        {/* Card header */}
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: "10px 14px 8px",
+            borderBottom: "1px solid rgba(255,255,255,0.04)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              color: "var(--text-muted)",
+            }}
           >
-            Create your first project
+            {showArchived ? "Archived Projects" : "All Projects"}
+          </span>
+          <button
+            onClick={() => setShowArchived((v) => !v)}
+            className="text-[10px] font-medium"
+            style={{ color: "var(--text-muted)", transition: "color 0.12s" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+          >
+            {showArchived ? "\u2190 Active" : `Archived (${projects.filter((p) => !filtered.includes(p) || true).length > 0 ? "" : "0"})`}
           </button>
         </div>
-      ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs font-medium uppercase tracking-widest text-white/30">
-              <th className="pb-3 pl-4 pr-6 font-medium">Name</th>
-              <th className="pb-3 pr-6 font-medium">Type</th>
-              <th className="pb-3 pr-6 font-medium">Updated</th>
-              <th className="pb-3 font-medium"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/[0.06]">
-            {filtered.map((project) => (
-              <tr
-                key={project.id}
-                className="group cursor-pointer transition-colors hover:bg-white/[0.03]"
-              >
-                <td className="py-3.5 pl-4 pr-6 font-medium text-white/90">
-                  <Link
-                    href={`/projects/${project.id}`}
-                    className="transition-colors hover:text-white"
-                  >
-                    {project.name}
-                  </Link>
-                </td>
-                <td className="py-3.5 pr-6 text-white/50">{project.type}</td>
-                <td className="py-3.5 pr-6 text-white/40">
-                  {formatDate(project.updated_at ?? project.created_at)}
-                </td>
-                <td className="py-3.5 text-right">
-                  <button
-                    onClick={() => handleArchive(project.id)}
-                    className="rounded px-2 py-1 text-xs text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
-                  >
-                    {showArchived ? "Unarchive" : "Archive"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
 
-      {/* Archived toggle */}
-      <div className="mt-6">
-        <button
-          onClick={() => setShowArchived((v) => !v)}
-          className="text-xs text-white/30 transition-colors hover:text-white/60"
-        >
-          {showArchived ? "← Back to active projects" : "View archived projects"}
-        </button>
+        {/* Table */}
+        {loading ? (
+          <div style={{ padding: "32px 14px" }}>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>Loading projects...</p>
+          </div>
+        ) : filtered.length === 0 && !loadError ? (
+          <div className="py-16 text-center">
+            <p style={{ color: "var(--text-muted)" }}>No projects yet.</p>
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-3 text-xs underline"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              Create your first project
+            </button>
+          </div>
+        ) : (
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <th
+                  className="pb-2 pl-3.5 pr-6 pt-2.5 text-left font-medium"
+                  style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}
+                >
+                  Name
+                </th>
+                <th
+                  className="pb-2 pr-6 pt-2.5 text-left font-medium"
+                  style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}
+                >
+                  Type
+                </th>
+                <th
+                  className="pb-2 pr-6 pt-2.5 text-left font-medium"
+                  style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}
+                >
+                  Updated
+                </th>
+                <th className="pb-2 pt-2.5 text-left font-medium" style={{ fontSize: 11 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((project) => {
+                const color = TYPE_COLORS[project.type] ?? "#5a9af5";
+                const icon = TYPE_ICONS[project.type];
+                return (
+                  <tr
+                    key={project.id}
+                    className="group cursor-pointer"
+                    style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.025)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                  >
+                    <td className="py-2.5 pl-3.5 pr-6">
+                      <Link
+                        href={`/projects/${project.id}`}
+                        className="flex items-center gap-3"
+                        style={{ color: "inherit", transition: "color 0.12s" }}
+                      >
+                        {/* Type icon badge */}
+                        <span
+                          className="flex shrink-0 items-center justify-center"
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: 7,
+                            background: color,
+                            color: "#fff",
+                          }}
+                        >
+                          {icon ?? (
+                            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="7" cy="7" r="5.5" />
+                            </svg>
+                          )}
+                        </span>
+                        <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                          {project.name}
+                        </span>
+                      </Link>
+                    </td>
+                    <td className="py-2.5 pr-6">
+                      <span
+                        style={{
+                          fontSize: 10,
+                          fontWeight: 500,
+                          padding: "1px 6px",
+                          borderRadius: 3,
+                          background: `${color}18`,
+                          color: color,
+                        }}
+                      >
+                        {project.type}
+                      </span>
+                    </td>
+                    <td className="py-2.5 pr-6" style={{ color: "var(--text-muted)" }}>
+                      {formatDate(project.updated_at ?? project.created_at)}
+                    </td>
+                    <td className="py-2.5 pr-3 text-right">
+                      <button
+                        onClick={(e) => { e.preventDefault(); handleArchive(project.id); }}
+                        className="text-[11px] font-medium"
+                        style={{
+                          padding: "0 6px",
+                          height: 24,
+                          borderRadius: 4,
+                          color: "var(--text-muted)",
+                          background: "transparent",
+                          border: "none",
+                          transition: "all 0.12s",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
+                      >
+                        {showArchived ? "Unarchive" : "Archive"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Create Project Modal */}
       {showModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
           onClick={() => setShowModal(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl"
+            className="w-full"
+            style={{
+              maxWidth: 420,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 12,
+              padding: "20px 24px",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-5 text-lg font-semibold">New Project</h2>
+            <h2 className="mb-5 text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>New Project</h2>
 
-            <label className="mb-1 block text-sm text-white/50">
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase" style={{ letterSpacing: "0.06em", color: "var(--text-muted)" }}>
               Project Name
             </label>
             <input
@@ -235,39 +389,80 @@ export default function HomePage() {
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               placeholder="e.g. My Next Book"
-              className="mb-4 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/25 focus:border-white/30 focus:outline-none"
+              className="mb-4 w-full text-[13px]"
+              style={{
+                padding: "7px 10px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border-default)",
+                borderRadius: 6,
+                color: "var(--text-primary)",
+                outline: "none",
+                transition: "border-color 0.15s",
+              }}
+              onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(90,154,245,0.35)")}
+              onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
             />
 
-            <label className="mb-1 block text-sm text-white/50">Type</label>
+            <label className="mb-1.5 block text-[10px] font-semibold uppercase" style={{ letterSpacing: "0.06em", color: "var(--text-muted)" }}>Type</label>
             <select
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              className="mb-6 w-full rounded-lg border border-white/10 bg-[#1a1a1a] px-3 py-2 text-sm text-white focus:border-white/30 focus:outline-none"
+              className="mb-6 w-full text-[13px]"
+              style={{
+                appearance: "none",
+                padding: "7px 28px 7px 10px",
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid var(--border-default)",
+                borderRadius: 6,
+                color: "var(--text-primary)",
+                outline: "none",
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 10px center",
+              }}
             >
               {TYPE_OPTIONS.map((t) => (
-                <option key={t} value={t} className="bg-[#1a1a1a] text-white">
+                <option key={t} value={t} style={{ background: "var(--surface-2)" }}>
                   {t}
                 </option>
               ))}
             </select>
 
             {error && (
-              <p className="mb-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-400">{error}</p>
+              <p className="mb-4 text-xs" style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: "7px 10px", borderRadius: 6 }}>{error}</p>
             )}
 
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => { setShowModal(false); setError(null); }}
-                className="rounded-lg px-4 py-2 text-sm text-white/50 transition-colors hover:text-white/80"
+                className="text-xs font-medium"
+                style={{
+                  height: 28,
+                  padding: "0 10px",
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 6,
+                  color: "var(--text-secondary)",
+                  transition: "all 0.12s",
+                }}
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreate}
                 disabled={!newName.trim() || creating}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:opacity-40"
+                className="text-xs font-semibold text-white whitespace-nowrap"
+                style={{
+                  height: 30,
+                  padding: "0 12px",
+                  background: "linear-gradient(180deg, #5a9af5, #4a88e0)",
+                  border: "none",
+                  borderRadius: 6,
+                  opacity: !newName.trim() || creating ? 0.35 : 1,
+                  cursor: !newName.trim() || creating ? "not-allowed" : "pointer",
+                }}
               >
-                {creating ? "Creating…" : "Create Project"}
+                {creating ? "Creating..." : "Create Project"}
               </button>
             </div>
           </div>

@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="bg-[#1c1f26] text-white antialiased">
+      <body>
         <AppShell>{children}</AppShell>
       </body>
     </html>

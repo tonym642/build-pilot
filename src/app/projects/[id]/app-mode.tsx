@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 
 /* ─── types ──────────────────────────────────────────────────────── */
 
@@ -119,34 +120,34 @@ function AppInfoPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8 max-w-2xl">
-        <h2 className="text-lg font-medium tracking-tight">
-          <span className="text-white">App Info</span>
-        </h2>
-        <p className="mt-1 text-xs text-white/35">Core details about your app — keep it sharp.</p>
-        <div className="mt-7 flex flex-col gap-6">
+      <div className="px-8 py-8" style={{ maxWidth: 720 }}>
+        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>App Info</h2>
+        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Core details about your app — keep it sharp.</p>
+        <div className="mt-7 flex flex-col gap-5">
           {fields.map(({ key, label, multiline, placeholder }) => (
-            <div key={key}>
-              <label className="mb-1.5 block text-xs font-medium uppercase tracking-widest text-white/35">
+            <div key={key} className="flex gap-6" style={{ alignItems: multiline ? "flex-start" : "center" }}>
+              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: multiline ? 10 : 0, letterSpacing: "0.06em", color: "var(--text-muted)" }}>
                 {label}
               </label>
-              {multiline ? (
-                <textarea
-                  rows={3}
-                  value={appInfo[key]}
-                  onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
-                  placeholder={placeholder}
-                  className="w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
-                />
-              ) : (
-                <input
-                  type="text"
-                  value={appInfo[key]}
-                  onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
-                  placeholder={placeholder}
-                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
-                />
-              )}
+              <div className="flex-1">
+                {multiline ? (
+                  <textarea
+                    rows={3}
+                    value={appInfo[key]}
+                    onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    className="w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={appInfo[key]}
+                    onChange={(e) => onChange({ ...appInfo, [key]: e.target.value })}
+                    placeholder={placeholder}
+                    className="w-full rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+                  />
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -165,32 +166,32 @@ function ConceptPanel({
   return (
     <div className="flex h-full min-h-0">
       {/* Left: brainstorm */}
-      <div className="flex flex-1 flex-col border-r border-white/[0.07] min-h-0">
+      <div className="flex flex-1 flex-col border-r border-[var(--border-default)] min-h-0">
         <div className="shrink-0 px-6 pt-6 pb-3">
-          <h3 className="text-sm font-medium text-white/60">Working Ideas</h3>
-          <p className="mt-0.5 text-xs text-white/25">Brain dump — nothing is final here.</p>
+          <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
+          <p className="mt-0.5 text-xs text-[var(--text-faint)]">Brain dump — nothing is final here.</p>
         </div>
         <div className="flex-1 min-h-0 px-6 pb-6">
           <textarea
             value={concept.brainstorm}
             onChange={(e) => onChange({ ...concept, brainstorm: e.target.value })}
             placeholder="Write freely about your app concept, user flows, ideas, comparisons..."
-            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
       {/* Right: committed */}
       <div className="flex flex-1 flex-col min-h-0">
         <div className="shrink-0 px-6 pt-6 pb-3">
-          <h3 className="text-sm font-medium text-white/60">Locked-In Concept</h3>
-          <p className="mt-0.5 text-xs text-white/25">The version you&rsquo;re building toward.</p>
+          <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Locked-In Concept</h3>
+          <p className="mt-0.5 text-xs text-[var(--text-faint)]">The version you&rsquo;re building toward.</p>
         </div>
         <div className="flex-1 min-h-0 px-6 pb-6">
           <textarea
             value={concept.committed}
             onChange={(e) => onChange({ ...concept, committed: e.target.value })}
             placeholder="Write your committed app concept here..."
-            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
@@ -233,12 +234,12 @@ function ScreensListPanel({
       <div className="px-8 py-8 max-w-3xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-medium tracking-tight text-white">Screens</h2>
-            <p className="mt-1 text-xs text-white/35">All screens in your app.</p>
+            <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Screens</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">All screens in your app.</p>
           </div>
           <button
             onClick={onAdd}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+            className="rounded-md text-white text-xs font-semibold transition-all hover:brightness-110" style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6 }}
           >
             + Add Screen
           </button>
@@ -246,10 +247,10 @@ function ScreensListPanel({
 
         {screens.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-white/40">No screens yet.</p>
+            <p className="text-[var(--text-muted)]">No screens yet.</p>
             <button
               onClick={onAdd}
-              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Create your first screen
             </button>
@@ -259,7 +260,7 @@ function ScreensListPanel({
             {screens.map((screen) => (
               <div
                 key={screen.id}
-                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+                className="group flex items-center rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.06)]"
               >
                 {editingId === screen.id ? (
                   <input
@@ -272,12 +273,12 @@ function ScreensListPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpen(screen.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {screen.name}
                   </button>
@@ -286,7 +287,7 @@ function ScreensListPanel({
                   <button
                     onClick={() => startRename(screen)}
                     title="Rename"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -296,7 +297,7 @@ function ScreensListPanel({
                   <button
                     onClick={() => setConfirmDeleteId(screen.id)}
                     title="Delete"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-red-400"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
@@ -313,15 +314,15 @@ function ScreensListPanel({
       {/* Confirm delete modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-            <h2 className="text-base font-semibold text-white">Delete screen?</h2>
-            <p className="mt-2 text-sm text-white/50">
+          <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete screen?</h2>
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
               This screen and all its sections will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
@@ -377,17 +378,17 @@ function ScreenDetailPanel({
     <div className="overflow-y-auto h-full">
       <div className="px-8 py-8 max-w-3xl">
         {/* Breadcrumb */}
-        <div className="mb-5 flex items-center gap-1.5 text-xs text-white/35">
-          <button onClick={onBack} className="hover:text-white/60 transition-colors">Screens</button>
+        <div className="mb-5 flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Screens</button>
           <span>/</span>
-          <span className="text-white/60">{screen.name}</span>
+          <span className="text-[var(--text-tertiary)]">{screen.name}</span>
         </div>
 
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-medium tracking-tight text-white">{screen.name}</h2>
+          <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">{screen.name}</h2>
           <button
             onClick={onAddSection}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+            className="rounded-md text-white text-xs font-semibold transition-all hover:brightness-110" style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6 }}
           >
             + Add Section
           </button>
@@ -395,10 +396,10 @@ function ScreenDetailPanel({
 
         {sections.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-white/40">No sections yet.</p>
+            <p className="text-[var(--text-muted)]">No sections yet.</p>
             <button
               onClick={onAddSection}
-              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Add the first section
             </button>
@@ -408,7 +409,7 @@ function ScreenDetailPanel({
             {sections.map((section) => (
               <div
                 key={section.id}
-                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+                className="group flex items-center rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.06)]"
               >
                 {editingId === section.id ? (
                   <input
@@ -421,12 +422,12 @@ function ScreenDetailPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpenSection(section.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {section.name}
                   </button>
@@ -435,7 +436,7 @@ function ScreenDetailPanel({
                   <button
                     onClick={() => startRename(section)}
                     title="Rename"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -445,7 +446,7 @@ function ScreenDetailPanel({
                   <button
                     onClick={() => setConfirmDeleteId(section.id)}
                     title="Delete"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-red-400"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
@@ -462,15 +463,15 @@ function ScreenDetailPanel({
       {/* Confirm delete modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-            <h2 className="text-base font-semibold text-white">Delete section?</h2>
-            <p className="mt-2 text-sm text-white/50">
+          <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete section?</h2>
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
               This section and its content will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
@@ -503,44 +504,44 @@ function SectionDetailPanel({
     <div className="flex flex-col h-full min-h-0">
       {/* Breadcrumb */}
       <div className="shrink-0 px-8 pt-6 pb-3">
-        <div className="flex items-center gap-1.5 text-xs text-white/35">
-          <button onClick={onBack} className="hover:text-white/60 transition-colors">Screens</button>
+        <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+          <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Screens</button>
           <span>/</span>
-          <button onClick={onBack} className="hover:text-white/60 transition-colors">{screenName}</button>
+          <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">{screenName}</button>
           <span>/</span>
-          <span className="text-white/60">{section.name}</span>
+          <span className="text-[var(--text-tertiary)]">{section.name}</span>
         </div>
       </div>
 
       {/* Two-panel workspace */}
       <div className="flex flex-1 min-h-0">
         {/* Left: brainstorm */}
-        <div className="flex flex-1 flex-col border-r border-white/[0.07] min-h-0">
+        <div className="flex flex-1 flex-col border-r border-[var(--border-default)] min-h-0">
           <div className="shrink-0 px-6 pt-3 pb-3">
-            <h3 className="text-sm font-medium text-white/60">Working Ideas</h3>
-            <p className="mt-0.5 text-xs text-white/25">Explore ideas for this section freely.</p>
+            <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
+            <p className="mt-0.5 text-xs text-[var(--text-faint)]">Explore ideas for this section freely.</p>
           </div>
           <div className="flex-1 min-h-0 px-6 pb-6">
             <textarea
               value={section.brainstorm}
               onChange={(e) => onChange({ ...section, brainstorm: e.target.value })}
               placeholder="Brainstorm layout, components, behavior, copy..."
-              className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
             />
           </div>
         </div>
         {/* Right: committed */}
         <div className="flex flex-1 flex-col min-h-0">
           <div className="shrink-0 px-6 pt-3 pb-3">
-            <h3 className="text-sm font-medium text-white/60">Committed Design</h3>
-            <p className="mt-0.5 text-xs text-white/25">The finalized spec for this section.</p>
+            <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Committed Design</h3>
+            <p className="mt-0.5 text-xs text-[var(--text-faint)]">The finalized spec for this section.</p>
           </div>
           <div className="flex-1 min-h-0 px-6 pb-6">
             <textarea
               value={section.committed}
               onChange={(e) => onChange({ ...section, committed: e.target.value })}
               placeholder="Write the locked-in design for this section..."
-              className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -593,10 +594,10 @@ function FeaturesPanel({
     return (
       <div className="flex flex-col h-full min-h-0">
         <div className="shrink-0 px-8 pt-6 pb-3">
-          <div className="flex items-center gap-1.5 text-xs text-white/35">
-            <button onClick={onBack} className="hover:text-white/60 transition-colors">Features</button>
+          <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+            <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Features</button>
             <span>/</span>
-            <span className="text-white/60">{activeFeature.name}</span>
+            <span className="text-[var(--text-tertiary)]">{activeFeature.name}</span>
           </div>
         </div>
         <div className="flex-1 min-h-0 px-8 pb-6">
@@ -604,7 +605,7 @@ function FeaturesPanel({
             value={activeFeature.description}
             onChange={(e) => onUpdateDescription(activeFeature.id, e.target.value)}
             placeholder="Describe this feature — what it does, how it works, edge cases, dependencies..."
-            className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
@@ -616,12 +617,12 @@ function FeaturesPanel({
       <div className="px-8 py-8 max-w-3xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-medium tracking-tight text-white">Features</h2>
-            <p className="mt-1 text-xs text-white/35">App-wide capabilities and functionality.</p>
+            <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Features</h2>
+            <p className="mt-1 text-xs text-[var(--text-muted)]">App-wide capabilities and functionality.</p>
           </div>
           <button
             onClick={onAdd}
-            className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+            className="rounded-md text-white text-xs font-semibold transition-all hover:brightness-110" style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6 }}
           >
             + Add Feature
           </button>
@@ -629,10 +630,10 @@ function FeaturesPanel({
 
         {features.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-white/40">No features yet.</p>
+            <p className="text-[var(--text-muted)]">No features yet.</p>
             <button
               onClick={onAdd}
-              className="mt-3 text-sm text-white/60 underline hover:text-white/80"
+              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Add your first feature
             </button>
@@ -642,7 +643,7 @@ function FeaturesPanel({
             {features.map((feature) => (
               <div
                 key={feature.id}
-                className="group flex items-center rounded-xl border border-white/[0.07] bg-white/[0.03] transition-colors hover:bg-white/[0.06]"
+                className="group flex items-center rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] transition-colors hover:bg-[rgba(255,255,255,0.06)]"
               >
                 {editingId === feature.id ? (
                   <input
@@ -655,12 +656,12 @@ function FeaturesPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-xl bg-transparent px-4 py-3 text-sm text-white/90 focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpen(feature.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-white/90 transition-colors hover:text-white"
+                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {feature.name}
                   </button>
@@ -669,7 +670,7 @@ function FeaturesPanel({
                   <button
                     onClick={() => startRename(feature)}
                     title="Rename"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -679,7 +680,7 @@ function FeaturesPanel({
                   <button
                     onClick={() => setConfirmDeleteId(feature.id)}
                     title="Delete"
-                    className="rounded p-1.5 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-red-400"
+                    className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-red-400"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="3 6 5 6 21 6" />
@@ -696,15 +697,15 @@ function FeaturesPanel({
       {/* Confirm delete modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-xl border border-white/10 bg-zinc-900 p-6 shadow-2xl">
-            <h2 className="text-base font-semibold text-white">Delete feature?</h2>
-            <p className="mt-2 text-sm text-white/50">
+          <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete feature?</h2>
+            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
               This feature will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-white/10 px-4 py-1.5 text-sm text-white/60 transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
@@ -732,15 +733,15 @@ function BuildPlanPanel({
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="shrink-0 px-8 pt-8 pb-3">
-        <h2 className="text-lg font-medium tracking-tight text-white">Build Plan</h2>
-        <p className="mt-1 text-xs text-white/35">Approved milestones, phases, and priorities for development.</p>
+        <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Build Plan</h2>
+        <p className="mt-1 text-xs text-[var(--text-muted)]">Approved milestones, phases, and priorities for development.</p>
       </div>
       <div className="flex-1 min-h-0 px-8 pb-8">
         <textarea
           value={buildPlan.content}
           onChange={(e) => onChange({ content: e.target.value })}
           placeholder="Outline your build plan — phases, milestones, priorities, dependencies..."
-          className="h-full w-full resize-none rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm text-white/80 placeholder:text-white/20 focus:border-white/[0.18] focus:outline-none transition-colors"
+          className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
         />
       </div>
     </div>
@@ -758,6 +759,36 @@ export default function AppMode({
 }) {
   const [appData, setAppData] = useState<AppData>(EMPTY_APP_DATA);
   const [view, setView] = useState<ViewState>({ page: "App Info" });
+  const [displayName, setDisplayName] = useState(projectName);
+  const [displayType, setDisplayType] = useState("App");
+
+  // Edit project modal
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editType, setEditType] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  function openEditModal() {
+    setEditName(displayName);
+    setEditType(displayType);
+    setShowEditModal(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!editName.trim()) return;
+    setSaving(true);
+    const res = await fetch("/api/projects", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: projectId, name: editName.trim(), type: editType }),
+    });
+    if (res.ok) {
+      setDisplayName(editName.trim());
+      setDisplayType(editType);
+      setShowEditModal(false);
+    }
+    setSaving(false);
+  }
   const [loaded, setLoaded] = useState(false);
 
   // Current page for tab highlighting
@@ -937,20 +968,20 @@ export default function AppMode({
     const screenSections = appData.sections.filter((s) => s.screenId === view.screenId);
 
     return (
-      <aside className="w-52 shrink-0 border-r border-white/[0.07] px-4 py-5 overflow-y-auto">
+      <aside className="w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-5 overflow-y-auto" style={{ background: "var(--surface-1)" }}>
         <div className="mb-4 px-2">
-          <p className="text-sm font-semibold tracking-tight text-white/90">{screen.name}</p>
-          <p className="mt-0.5 text-xs text-white/35">{screenSections.length} section{screenSections.length !== 1 ? "s" : ""}</p>
+          <p className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">{screen.name}</p>
+          <p className="mt-0.5 text-xs text-[var(--text-muted)]">{screenSections.length} section{screenSections.length !== 1 ? "s" : ""}</p>
         </div>
-        <div className="mb-4 border-t border-white/[0.07]" />
+        <div className="mb-4 border-t border-[var(--border-default)]" />
         <nav className="flex flex-col gap-0.5 text-sm">
           <button
             onClick={() => setView({ page: "Screens", screenId: view.screenId })}
             className={[
               "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
               !("sectionId" in view) || !view.sectionId
-                ? "bg-white/[0.08] text-white"
-                : "text-white/50 hover:text-white/80",
+                ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
+                : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
             ].join(" ")}
           >
             Overview
@@ -962,8 +993,8 @@ export default function AppMode({
               className={[
                 "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
                 "sectionId" in view && view.sectionId === section.id
-                  ? "bg-white/[0.08] text-white"
-                  : "text-white/50 hover:text-white/80",
+                  ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
+                  : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
               ].join(" ")}
             >
               {section.name}
@@ -1070,9 +1101,47 @@ export default function AppMode({
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div className="flex flex-col" style={{ height: "100vh" }}>
+      {/* Project header bar */}
+      <div
+        className="flex shrink-0 items-center gap-4 px-6"
+        style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)" }}
+      >
+        <Link
+          href="/"
+          className="flex items-center gap-1.5 text-[12px] font-medium transition-colors"
+          style={{ color: "var(--text-tertiary)", padding: "4px 10px", borderRadius: 6, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-default)" }}
+        >
+          &larr; Back
+        </Link>
+        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+          {displayName}
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 500,
+            padding: "1px 6px",
+            borderRadius: 3,
+            background: displayType === "App" ? "rgba(139,124,245,0.18)" : displayType === "Book" ? "rgba(74,222,128,0.18)" : displayType === "Music" ? "rgba(90,154,245,0.18)" : "rgba(251,191,36,0.18)",
+            color: displayType === "App" ? "#8b7cf5" : displayType === "Book" ? "#4ade80" : displayType === "Music" ? "#5a9af5" : "#fbbf24",
+          }}
+        >
+          {displayType}
+        </span>
+        <button
+          onClick={openEditModal}
+          className="text-[12px] font-medium transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+        >
+          Edit
+        </button>
+      </div>
+
       {/* Page navigation tabs */}
-      <div className="flex shrink-0 gap-1 border-b border-white/[0.07] px-8 pb-3">
+      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3">
         {PAGES.map((page) => (
           <button
             key={page}
@@ -1080,8 +1149,8 @@ export default function AppMode({
             className={[
               "rounded-t px-3 pb-3.5 pt-3 text-sm transition-colors",
               currentPage === page
-                ? "border-b-2 border-white font-medium text-white"
-                : "text-white/35 hover:bg-white/[0.04] hover:text-white/65",
+                ? "border-b-2 border-[var(--accent-blue)] font-medium text-[var(--text-primary)]"
+                : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]",
             ].join(" ")}
           >
             {page}
@@ -1096,6 +1165,81 @@ export default function AppMode({
           {renderContent()}
         </div>
       </div>
+
+      {/* Edit project modal */}
+      {showEditModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowEditModal(false)}
+        >
+          <div
+            className="w-full"
+            style={{ maxWidth: 420, background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="mb-5 text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit Project</h2>
+
+            <div className="flex gap-6 mb-4" style={{ alignItems: "center" }}>
+              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 80, letterSpacing: "0.06em", color: "var(--text-muted)" }}>Name</label>
+              <input
+                autoFocus
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
+                className="flex-1 text-[13px]"
+                style={{ padding: "7px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", outline: "none", transition: "border-color 0.15s" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(90,154,245,0.35)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+              />
+            </div>
+
+            <div className="flex gap-6 mb-6" style={{ alignItems: "center" }}>
+              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 80, letterSpacing: "0.06em", color: "var(--text-muted)" }}>Type</label>
+              <select
+                value={editType}
+                onChange={(e) => setEditType(e.target.value)}
+                className="flex-1 text-[13px]"
+                style={{
+                  appearance: "none",
+                  padding: "7px 28px 7px 10px",
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: 6,
+                  color: "var(--text-primary)",
+                  outline: "none",
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 10px center",
+                }}
+              >
+                {(["Book", "App", "Business", "Music"] as const).map((t) => (
+                  <option key={t} value={t} style={{ background: "var(--surface-2)" }}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-xs font-medium"
+                style={{ height: 28, padding: "0 10px", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-secondary)", transition: "all 0.12s" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEdit}
+                disabled={!editName.trim() || saving}
+                className="text-xs font-semibold text-white whitespace-nowrap"
+                style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6, opacity: !editName.trim() || saving ? 0.35 : 1, cursor: !editName.trim() || saving ? "not-allowed" : "pointer" }}
+              >
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

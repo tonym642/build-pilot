@@ -338,7 +338,7 @@ export default function FinalEditPage({
   if (loading) {
     return (
       <div className="px-8 py-10">
-        <p className="text-sm text-white/40">Loading version...</p>
+        <p className="text-sm text-[var(--text-muted)]">Loading version...</p>
       </div>
     );
   }
@@ -346,10 +346,10 @@ export default function FinalEditPage({
   if (!version) {
     return (
       <div className="px-8 py-10">
-        <p className="text-sm text-white/40">Version not found.</p>
+        <p className="text-sm text-[var(--text-muted)]">Version not found.</p>
         <Link
           href={backRoute}
-          className="mt-2 inline-block text-sm text-white/50 underline hover:text-white/80"
+          className="mt-2 inline-block text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
         >
           Back to project
         </Link>
@@ -360,21 +360,21 @@ export default function FinalEditPage({
   const progressPercent = totalSections > 0 ? (finalizedCount / totalSections) * 100 : 0;
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 3.5rem)" }}>
+    <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* Header */}
-      <div className="shrink-0 border-b border-white/[0.07]">
+      <div className="shrink-0 border-b border-[var(--border-default)]" style={{ background: "var(--surface-1)", borderColor: "var(--border-subtle)" }}>
         <div className="flex items-center justify-between px-8 py-3">
           <div className="flex items-center gap-4">
             <Link
               href={backRoute}
-              className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white"
+              className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)]"
             >
               &larr; Back
             </Link>
-            <h1 className="text-sm font-semibold text-white/90">
+            <h1 className="text-sm font-semibold text-[var(--text-primary)]">
               Version {version.version_number} &mdash; Final Edit
             </h1>
-            <span className="text-xs text-white/35">
+            <span className="text-xs text-[var(--text-muted)]">
               {new Date(version.created_at).toLocaleString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -385,13 +385,14 @@ export default function FinalEditPage({
             </span>
           </div>
           <div className="flex items-center gap-4">
-            <p className="text-xs text-white/40">
+            <p className="text-xs text-[var(--text-muted)]">
               {finalizedCount} of {totalSections} finalized &bull; {reviewedCount} of {totalSections} reviewed
             </p>
             {finalizedCount === totalSections && totalSections > 0 && (
               <button
                 onClick={() => console.log("Print PDF - version:", versionId)}
-                className="rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+                className="text-white text-xs font-semibold transition-colors"
+                style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6 }}
               >
                 Print PDF
               </button>
@@ -400,7 +401,7 @@ export default function FinalEditPage({
         </div>
 
         {/* Progress bar */}
-        <div className="h-1 bg-white/[0.05]">
+        <div className="h-1 bg-[rgba(255,255,255,0.04)]">
           <div
             className="h-full bg-green-500/60 transition-all duration-300"
             style={{ width: `${progressPercent}%` }}
@@ -411,8 +412,8 @@ export default function FinalEditPage({
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar — section nav */}
-        <aside className="w-48 shrink-0 border-r border-white/[0.07] px-3 py-4 overflow-y-auto">
-          <p className="mb-3 px-2 text-xs uppercase tracking-widest text-white/30">
+        <aside className="w-48 shrink-0 border-r border-[var(--border-default)] px-3 py-4 overflow-y-auto" style={{ background: "var(--surface-1)" }}>
+          <p className="mb-3 px-2 text-xs uppercase tracking-widest text-[var(--text-faint)]">
             Sections
           </p>
           <nav className="flex flex-col gap-1">
@@ -423,8 +424,8 @@ export default function FinalEditPage({
                 className={[
                   "w-full rounded px-2 py-1.5 text-left text-sm transition-colors flex items-center gap-2",
                   activeSectionId === s.id
-                    ? "bg-white/[0.08] text-white"
-                    : "text-white/50 hover:text-white/80",
+                    ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
+                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
                 ].join(" ")}
               >
                 <span
@@ -453,7 +454,7 @@ export default function FinalEditPage({
               {/* Section header */}
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-semibold text-white/90">
+                  <h2 className="text-xl font-semibold text-[var(--text-primary)]">
                     {activeSectionData.section_title}
                   </h2>
                   {activeSectionData.is_finalized && (
@@ -463,14 +464,14 @@ export default function FinalEditPage({
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-white/30">
+                  <span className="text-xs text-[var(--text-faint)]">
                     Section {activeIndex + 1} of {totalSections}
                   </span>
                   {!activeSectionData.is_finalized && activeSectionData.section_type !== "info" && (
                     <button
                       onClick={handleReviewSection}
                       disabled={reviewing}
-                      className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-xs text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white disabled:opacity-40"
+                      className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)] disabled:opacity-40"
                     >
                       {reviewing ? "Reviewing..." : "Review Section"}
                     </button>
@@ -487,15 +488,15 @@ export default function FinalEditPage({
               </div>
 
               {/* AI review status */}
-              <p className="text-xs text-white/30 mb-4">{aiStatusLabel}</p>
+              <p className="text-xs text-[var(--text-faint)] mb-4">{aiStatusLabel}</p>
 
               {/* Content editor */}
               {activeSectionData.is_finalized ? (
-                <div className="whitespace-pre-wrap text-sm text-white/60 leading-7 bg-white/[0.03] rounded-lg p-4 min-h-[40vh]">
+                <div className="whitespace-pre-wrap text-sm text-[var(--text-tertiary)] leading-7 bg-[rgba(255,255,255,0.03)] rounded-lg p-4 min-h-[40vh]">
                   {activeSectionData.content}
                 </div>
               ) : activeSectionData.section_type === "info" ? (
-                <pre className="whitespace-pre-wrap text-sm text-white/60 leading-7 bg-white/[0.03] rounded-lg p-4">
+                <pre className="whitespace-pre-wrap text-sm text-[var(--text-tertiary)] leading-7 bg-[rgba(255,255,255,0.03)] rounded-lg p-4">
                   {(() => {
                     try {
                       const info = JSON.parse(activeSectionData.content);
@@ -514,7 +515,7 @@ export default function FinalEditPage({
                   onChange={(e) =>
                     handleSectionContentChange(activeSectionData.id, e.target.value)
                   }
-                  className="w-full min-h-[55vh] rounded-lg border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-sm text-white/80 leading-7 placeholder:text-white/20 focus:border-white/20 focus:outline-none resize-none"
+                  className="w-full min-h-[55vh] rounded-lg border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] leading-7 placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none resize-none"
                   placeholder="Section content..."
                 />
               )}
@@ -524,14 +525,14 @@ export default function FinalEditPage({
                 <button
                   onClick={goPrev}
                   disabled={activeIndex <= 0}
-                  className="rounded-lg bg-white/[0.06] px-4 py-2 text-sm text-white/50 transition-colors hover:bg-white/[0.1] hover:text-white/70 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   &larr; Previous Section
                 </button>
                 <button
                   onClick={goNext}
                   disabled={activeIndex >= sections.length - 1}
-                  className="rounded-lg bg-white/[0.06] px-4 py-2 text-sm text-white/50 transition-colors hover:bg-white/[0.1] hover:text-white/70 disabled:opacity-30 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-secondary)] disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Next Section &rarr;
                 </button>
@@ -539,29 +540,29 @@ export default function FinalEditPage({
             </div>
           ) : (
             <div className="px-6 py-8">
-              <p className="text-sm text-white/30">Select a section to edit.</p>
+              <p className="text-sm text-[var(--text-faint)]">Select a section to edit.</p>
             </div>
           )}
         </div>
 
         {/* Right: AI proofing panel */}
-        <aside className="w-1/2 shrink-0 border-l border-white/[0.07] flex flex-col overflow-hidden">
+        <aside className="w-1/2 shrink-0 border-l border-[var(--border-default)] flex flex-col overflow-hidden" style={{ background: "var(--surface-1)" }}>
           <div className="flex-1 overflow-y-auto px-4 py-4">
             {reviewing ? (
               <div>
-                <h3 className="text-sm font-semibold text-white/80 mb-1">AI Final Proofing</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-1">AI Final Proofing</h3>
                 {activeSectionData && (
-                  <p className="text-xs text-white/35 mb-3">{activeSectionData.section_title}</p>
+                  <p className="text-xs text-[var(--text-muted)] mb-3">{activeSectionData.section_title}</p>
                 )}
-                <p className="text-xs text-white/40">Analyzing section...</p>
+                <p className="text-xs text-[var(--text-muted)]">Analyzing section...</p>
               </div>
             ) : suggestions.length === 0 ? (
               <div>
-                <h3 className="text-sm font-semibold text-white/80 mb-1">AI Final Proofing</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-1">AI Final Proofing</h3>
                 {activeSectionData && (
-                  <p className="text-xs text-white/35 mb-3">{activeSectionData.section_title}</p>
+                  <p className="text-xs text-[var(--text-muted)] mb-3">{activeSectionData.section_title}</p>
                 )}
-                <p className="text-xs text-white/25">
+                <p className="text-xs text-[var(--text-faint)]">
                   {activeSectionData?.is_finalized
                     ? "This section is finalized."
                     : reviewState === "complete"
@@ -571,36 +572,36 @@ export default function FinalEditPage({
               </div>
             ) : (
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-white/80 mb-1">AI Final Proofing</h3>
+                <h3 className="text-sm font-semibold text-[var(--text-secondary)] mb-1">AI Final Proofing</h3>
                 {activeSectionData && (
-                  <p className="text-xs text-white/35">{activeSectionData.section_title}</p>
+                  <p className="text-xs text-[var(--text-muted)]">{activeSectionData.section_title}</p>
                 )}
-                <p className="text-xs text-white/40 mb-2">
+                <p className="text-xs text-[var(--text-muted)] mb-2">
                   {handledCount} of {totalSuggestions} handled &bull; {pendingCount} remaining
                 </p>
                 {suggestions.map((s, i) => (
                   <div
                     key={i}
                     className={[
-                      "rounded-lg border p-3 text-xs",
+                      "rounded-[10px] border p-3 text-xs",
                       s.status === "accepted" || s.status === "edited"
                         ? "border-green-500/20 bg-green-500/5 opacity-60"
                         : s.status === "skipped"
-                        ? "border-white/[0.05] bg-white/[0.01] opacity-40"
-                        : "border-white/[0.1] bg-white/[0.03]",
+                        ? "border-[var(--border-subtle)] bg-[rgba(255,255,255,0.01)] opacity-40"
+                        : "border-[var(--border-hover)] bg-[rgba(255,255,255,0.03)]",
                     ].join(" ")}
                   >
                     <div className="mb-2">
-                      <p className="text-white/30 mb-1">Original:</p>
-                      <p className="text-white/50 line-through">{s.original_text}</p>
+                      <p className="text-[var(--text-faint)] mb-1">Original:</p>
+                      <p className="text-[var(--text-tertiary)] line-through">{s.original_text}</p>
                     </div>
                     <div className="mb-2">
-                      <p className="text-white/30 mb-1">Suggested:</p>
+                      <p className="text-[var(--text-faint)] mb-1">Suggested:</p>
                       {editingIndex === i ? (
                         <textarea
                           value={s.editedText ?? s.suggested_text}
                           onChange={(e) => handleEditChange(i, e.target.value)}
-                          className="w-full rounded border border-white/10 bg-white/[0.05] px-2 py-1 text-xs text-white/80 focus:border-white/30 focus:outline-none resize-none"
+                          className="w-full rounded border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] px-2 py-1 text-xs text-[var(--text-secondary)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none resize-none"
                           rows={3}
                         />
                       ) : (
@@ -609,7 +610,7 @@ export default function FinalEditPage({
                         </p>
                       )}
                     </div>
-                    <p className="text-white/25 italic mb-2">{s.reason}</p>
+                    <p className="text-[var(--text-faint)] italic mb-2">{s.reason}</p>
                     {s.status === "pending" && (
                       <div className="flex gap-2">
                         <button
@@ -621,14 +622,14 @@ export default function FinalEditPage({
                         {editingIndex !== i && (
                           <button
                             onClick={() => handleStartEdit(i)}
-                            className="rounded bg-white/[0.06] px-2 py-1 text-white/50 transition-colors hover:bg-white/[0.1] hover:text-white/70"
+                            className="rounded bg-[rgba(255,255,255,0.06)] px-2 py-1 text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-secondary)]"
                           >
                             Edit
                           </button>
                         )}
                         <button
                           onClick={() => handleSkip(i)}
-                          className="rounded bg-white/[0.06] px-2 py-1 text-white/30 transition-colors hover:bg-white/[0.1] hover:text-white/50"
+                          className="rounded bg-[rgba(255,255,255,0.06)] px-2 py-1 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-tertiary)]"
                         >
                           Skip
                         </button>
@@ -636,7 +637,7 @@ export default function FinalEditPage({
                     )}
                     {s.status === "accepted" && <p className="text-green-400/60">Accepted</p>}
                     {s.status === "edited" && <p className="text-green-400/60">Edited &amp; Applied</p>}
-                    {s.status === "skipped" && <p className="text-white/25">Skipped</p>}
+                    {s.status === "skipped" && <p className="text-[var(--text-faint)]">Skipped</p>}
                   </div>
                 ))}
               </div>
@@ -652,15 +653,15 @@ export default function FinalEditPage({
           onClick={() => setFinalizeModal(null)}
         >
           <div
-            className="w-full max-w-sm rounded-xl border border-white/10 bg-[#1a1a1a] p-6 shadow-2xl"
+            className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             {finalizeModal === "no_review" ? (
               <>
-                <h2 className="text-base font-semibold text-white mb-2">
+                <h2 className="text-base font-semibold text-[var(--text-primary)] mb-2">
                   Finalize without AI review?
                 </h2>
-                <p className="text-sm text-white/50 mb-5">
+                <p className="text-sm text-[var(--text-tertiary)] mb-5">
                   You have not reviewed this section with AI. Are you sure you want to finalize it?
                 </p>
                 <div className="flex justify-end gap-2">
@@ -669,7 +670,7 @@ export default function FinalEditPage({
                       console.log("cancel chosen");
                       setFinalizeModal(null);
                     }}
-                    className="rounded-lg px-3 py-1.5 text-sm text-white/50 transition-colors hover:text-white/80"
+                    className="rounded-lg px-3 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
                   >
                     Cancel
                   </button>
@@ -679,7 +680,7 @@ export default function FinalEditPage({
                       setFinalizeModal(null);
                       handleReviewSection();
                     }}
-                    className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white"
+                    className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)]"
                   >
                     Review First
                   </button>
@@ -696,10 +697,10 @@ export default function FinalEditPage({
               </>
             ) : (
               <>
-                <h2 className="text-base font-semibold text-white mb-2">
+                <h2 className="text-base font-semibold text-[var(--text-primary)] mb-2">
                   Pending AI suggestions
                 </h2>
-                <p className="text-sm text-white/50 mb-5">
+                <p className="text-sm text-[var(--text-tertiary)] mb-5">
                   You still have {pendingCount} unresolved suggestion{pendingCount !== 1 ? "s" : ""} for this section. What would you like to do?
                 </p>
                 <div className="flex justify-end gap-2">
@@ -708,7 +709,7 @@ export default function FinalEditPage({
                       console.log("cancel chosen");
                       setFinalizeModal(null);
                     }}
-                    className="rounded-lg px-3 py-1.5 text-sm text-white/50 transition-colors hover:text-white/80"
+                    className="rounded-lg px-3 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
                   >
                     Cancel
                   </button>
@@ -717,7 +718,7 @@ export default function FinalEditPage({
                       console.log("go-back-to-review chosen");
                       setFinalizeModal(null);
                     }}
-                    className="rounded-lg bg-white/[0.08] px-3 py-1.5 text-sm text-white/70 transition-colors hover:bg-white/[0.12] hover:text-white"
+                    className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)]"
                   >
                     Go Back to Review
                   </button>
