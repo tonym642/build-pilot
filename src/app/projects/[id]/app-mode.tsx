@@ -120,12 +120,12 @@ function AppInfoPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8" style={{ maxWidth: 720 }}>
+      <div className="px-8 py-8 mobile-px-4" style={{ maxWidth: 720 }}>
         <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>App Info</h2>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Core details about your app — keep it sharp.</p>
         <div className="mt-7 flex flex-col gap-5">
           {fields.map(({ key, label, multiline, placeholder }) => (
-            <div key={key} className="flex gap-6" style={{ alignItems: multiline ? "flex-start" : "center" }}>
+            <div key={key} className="flex gap-6 mobile-stack" style={{ alignItems: multiline ? "flex-start" : "center" }}>
               <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: multiline ? 10 : 0, letterSpacing: "0.06em", color: "var(--text-muted)" }}>
                 {label}
               </label>
@@ -164,7 +164,7 @@ function ConceptPanel({
   onChange: (updated: ConceptData) => void;
 }) {
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex h-full min-h-0 mobile-stack">
       {/* Left: brainstorm */}
       <div className="flex flex-1 flex-col border-r border-[var(--border-default)] min-h-0">
         <div className="shrink-0 px-6 pt-6 pb-3">
@@ -231,7 +231,7 @@ function ScreensListPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8 max-w-3xl">
+      <div className="px-8 py-8 max-w-3xl mobile-px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Screens</h2>
@@ -376,7 +376,7 @@ function ScreenDetailPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8 max-w-3xl">
+      <div className="px-8 py-8 max-w-3xl mobile-px-4">
         {/* Breadcrumb */}
         <div className="mb-5 flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
           <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Screens</button>
@@ -503,7 +503,7 @@ function SectionDetailPanel({
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Breadcrumb */}
-      <div className="shrink-0 px-8 pt-6 pb-3">
+      <div className="shrink-0 px-8 pt-6 pb-3 mobile-px-4">
         <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
           <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Screens</button>
           <span>/</span>
@@ -593,14 +593,14 @@ function FeaturesPanel({
   if (activeFeature) {
     return (
       <div className="flex flex-col h-full min-h-0">
-        <div className="shrink-0 px-8 pt-6 pb-3">
+        <div className="shrink-0 px-8 pt-6 pb-3 mobile-px-4">
           <div className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
             <button onClick={onBack} className="hover:text-[var(--text-tertiary)] transition-colors">Features</button>
             <span>/</span>
             <span className="text-[var(--text-tertiary)]">{activeFeature.name}</span>
           </div>
         </div>
-        <div className="flex-1 min-h-0 px-8 pb-6">
+        <div className="flex-1 min-h-0 px-8 pb-6 mobile-px-4">
           <textarea
             value={activeFeature.description}
             onChange={(e) => onUpdateDescription(activeFeature.id, e.target.value)}
@@ -614,7 +614,7 @@ function FeaturesPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8 max-w-3xl">
+      <div className="px-8 py-8 max-w-3xl mobile-px-4">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Features</h2>
@@ -732,11 +732,11 @@ function BuildPlanPanel({
 }) {
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="shrink-0 px-8 pt-8 pb-3">
+      <div className="shrink-0 px-8 pt-8 pb-3 mobile-px-4">
         <h2 className="text-lg font-medium tracking-tight text-[var(--text-primary)]">Build Plan</h2>
         <p className="mt-1 text-xs text-[var(--text-muted)]">Approved milestones, phases, and priorities for development.</p>
       </div>
-      <div className="flex-1 min-h-0 px-8 pb-8">
+      <div className="flex-1 min-h-0 px-8 pb-8 mobile-px-4">
         <textarea
           value={buildPlan.content}
           onChange={(e) => onChange({ content: e.target.value })}
@@ -790,6 +790,12 @@ export default function AppMode({
     setSaving(false);
   }
   const [loaded, setLoaded] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Close mobile sidebar on navigation
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [view]);
 
   // Current page for tab highlighting
   const currentPage: PageId = view.page;
@@ -968,7 +974,7 @@ export default function AppMode({
     const screenSections = appData.sections.filter((s) => s.screenId === view.screenId);
 
     return (
-      <aside className="w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-5 overflow-y-auto" style={{ background: "var(--surface-1)" }}>
+      <aside className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-5 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ background: "var(--surface-1)", zIndex: 41 }}>
         <div className="mb-4 px-2">
           <p className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">{screen.name}</p>
           <p className="mt-0.5 text-xs text-[var(--text-muted)]">{screenSections.length} section{screenSections.length !== 1 ? "s" : ""}</p>
@@ -1104,8 +1110,8 @@ export default function AppMode({
     <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* Project header bar */}
       <div
-        className="flex shrink-0 items-center gap-4 px-6"
-        style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)" }}
+        className="flex shrink-0 items-center gap-4 mobile-px-4"
+        style={{ height: 48, padding: "0 24px", background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)" }}
       >
         <Link
           href="/"
@@ -1114,10 +1120,22 @@ export default function AppMode({
         >
           &larr; Back
         </Link>
-        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+        {/* Mobile sidebar toggle */}
+        <button
+          className="desktop-hidden flex items-center justify-center"
+          onClick={() => setMobileSidebarOpen((v: boolean) => !v)}
+          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)" }}
+          aria-label="Toggle sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </button>
+        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {displayName}
         </span>
         <span
+          className="mobile-hidden"
           style={{
             fontSize: 10,
             fontWeight: 500,
@@ -1141,7 +1159,7 @@ export default function AppMode({
       </div>
 
       {/* Page navigation tabs */}
-      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3">
+      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3 mobile-px-4" style={{ overflowX: "auto" }}>
         {PAGES.map((page) => (
           <button
             key={page}
@@ -1159,7 +1177,15 @@ export default function AppMode({
       </div>
 
       {/* Body: optional sidebar + content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden" style={{ position: "relative" }}>
+        {/* Mobile sidebar overlay */}
+        {mobileSidebarOpen && (
+          <div
+            className="desktop-hidden"
+            style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
         {renderSidebar()}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
           {renderContent()}
@@ -1175,7 +1201,7 @@ export default function AppMode({
         >
           <div
             className="w-full"
-            style={{ maxWidth: 420, background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
+            style={{ maxWidth: 420, margin: "0 16px", background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-5 text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit Project</h2>

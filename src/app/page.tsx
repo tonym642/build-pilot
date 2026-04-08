@@ -168,7 +168,7 @@ function HomePageContent() {
       : activeFilter;
 
   return (
-    <div style={{ padding: "24px 32px" }}>
+    <div className="mobile-px-4" style={{ padding: "24px 32px" }}>
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -251,7 +251,8 @@ function HomePageContent() {
             </button>
           </div>
         ) : (
-          <table className="w-full text-[13px]">
+          <div className="mobile-overflow-x-auto">
+          <table className="w-full text-[13px]" style={{ minWidth: 480 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                 <th
@@ -356,6 +357,7 @@ function HomePageContent() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -370,6 +372,7 @@ function HomePageContent() {
             className="w-full"
             style={{
               maxWidth: 420,
+              margin: "0 16px",
               background: "var(--surface-2)",
               border: "1px solid var(--border-default)",
               borderRadius: 12,

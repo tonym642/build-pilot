@@ -63,7 +63,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const isHome = pathname === "/";
@@ -82,7 +82,7 @@ export function Sidebar() {
     >
       {/* Brand */}
       <div style={{ padding: "14px 12px 18px" }}>
-        <Link href="/">
+        <Link href="/" onClick={onNavigate}>
           <img
             src="/logo-light.png"
             alt="Build Pilot"
@@ -99,6 +99,7 @@ export function Sidebar() {
             <Link
               key={item.filter}
               href={item.filter === "All" ? "/" : `/?filter=${item.filter}`}
+              onClick={onNavigate}
               className="flex items-center"
               style={{
                 gap: 10,

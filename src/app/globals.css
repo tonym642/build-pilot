@@ -39,6 +39,36 @@ html {
   line-height: 1.55;
 }
 
+/* ─── Mobile utilities ─────────────────────────────────── */
+@media (max-width: 768px) {
+  .mobile-hidden {
+    display: none !important;
+  }
+  .mobile-px-4 {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+  .mobile-overflow-x-auto {
+    overflow-x: auto !important;
+  }
+}
+@media (max-width: 768px) {
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  .mobile-stack > label {
+    width: auto !important;
+  }
+  .mobile-w-full {
+    width: 100% !important;
+  }
+}
+@media (min-width: 769px) {
+  .desktop-hidden {
+    display: none !important;
+  }
+}
+
 body {
   font-family: Inter, system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;

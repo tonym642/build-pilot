@@ -98,12 +98,12 @@ function BookInfoPanel({
 
   return (
     <div className="overflow-y-auto h-full">
-      <div className="px-8 py-8" style={{ maxWidth: 720 }}>
+      <div className="px-8 py-8 mobile-px-4" style={{ maxWidth: 720 }}>
         <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Book Info</h2>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Project metadata — not included in the manuscript.</p>
         <div className="mt-7 flex flex-col gap-5">
           {fields.map(({ key, label, multiline, placeholder }) => (
-            <div key={key} className="flex gap-6" style={{ alignItems: multiline ? "flex-start" : "center" }}>
+            <div key={key} className="flex gap-6 mobile-stack" style={{ alignItems: multiline ? "flex-start" : "center" }}>
               <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: multiline ? 10 : 0, letterSpacing: "0.06em", color: "var(--text-muted)" }}>
                 {label}
               </label>
@@ -245,7 +245,7 @@ function BrainstormingPanel({
   }
 
   return (
-    <div className="flex h-full flex-col px-8">
+    <div className="flex h-full flex-col px-8 mobile-px-4">
       {/* Panel header */}
       <div className="shrink-0 py-5">
         <div className="flex items-center gap-2">
@@ -419,7 +419,7 @@ function CompilationPanel({
   ];
 
   return (
-    <div className="flex h-full flex-col px-8">
+    <div className="flex h-full flex-col px-8 mobile-px-4">
       <div className="shrink-0 py-5">
         <h2 className="text-lg font-medium tracking-tight">
           <span className="text-[var(--text-primary)]">Compilation</span>
@@ -554,7 +554,7 @@ function DraftPanel({
   }
 
   return (
-    <div className="flex h-full flex-col px-8">
+    <div className="flex h-full flex-col px-8 mobile-px-4">
       <div className="shrink-0 py-5">
         <h2 className="text-lg font-medium tracking-tight">
           <span className="text-[var(--text-primary)]">Draft</span>
@@ -846,6 +846,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [bookStructure, setBookStructure] = useState<{ id: string; type: string; title: string; position: number }[]>([]);
   const [bookVersions, setBookVersions] = useState<{ id: string; version_number: number; source: string; status: string; created_at: string; derived_status?: string }[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Close mobile sidebar when section changes
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [activeSection, activeStage]);
 
   // Load project record via API
   useEffect(() => {
@@ -1378,8 +1384,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* Project header bar */}
       <div
-        className="flex shrink-0 items-center gap-4 px-6"
-        style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)" }}
+        className="flex shrink-0 items-center gap-4 mobile-px-4"
+        style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
       >
         <Link
           href="/"
@@ -1388,10 +1394,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         >
           &larr; Back
         </Link>
-        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>
+        {/* Mobile sidebar toggle */}
+        <button
+          className="desktop-hidden flex items-center justify-center"
+          onClick={() => setMobileSidebarOpen((v) => !v)}
+          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)" }}
+          aria-label="Toggle sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M2 4h12M2 8h12M2 12h12" />
+          </svg>
+        </button>
+        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {projectName || bookInfo.title || "Untitled Project"}
         </span>
         <span
+          className="mobile-hidden"
           style={{
             fontSize: 10,
             fontWeight: 500,
@@ -1415,7 +1433,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       </div>
 
       {/* Stage navigation */}
-      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3">
+      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3 mobile-px-4" style={{ overflowX: "auto" }}>
         {STAGES.map((stage) => (
           <button
             key={stage}
@@ -1433,10 +1451,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       </div>
 
       {/* Body: sidebar + content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden" style={{ position: "relative" }}>
+        {/* Mobile sidebar overlay */}
+        {mobileSidebarOpen && (
+          <div
+            className="desktop-hidden"
+            style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }}
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+        )}
         {/* Left sidebar — editing nav for writing stages, reader nav for Manuscript/Book */}
         {activeStage !== "Manuscript" && activeStage !== "Book" ? (
-        <aside className="w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto" key="edit-sidebar" style={{ background: "var(--surface-1)" }}>
+        <aside
+          className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`}
+          key="edit-sidebar"
+          style={{ background: "var(--surface-1)", zIndex: 41, position: undefined }}
+        >
           <nav className="flex flex-col gap-1 text-sm">
             {/* Book Info */}
             <button
@@ -1528,7 +1558,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </nav>
         </aside>
         ) : activeStage === "Manuscript" ? (
-        <aside className="w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto" style={{ background: "var(--surface-1)" }}>
+        <aside className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ background: "var(--surface-1)", zIndex: 41 }}>
           {/* Reader navigation */}
           <nav className="flex flex-col gap-0.5 text-sm">
             {(["prologue", ...chapters, "epilogue"])
@@ -1590,7 +1620,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               onUndo={handleUndoBlock}
             />
           ) : activeStage === "Manuscript" ? (
-            <div className="overflow-y-auto h-full px-8 py-6">
+            <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="mx-auto max-w-3xl">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Manuscript</h2>
@@ -1646,7 +1676,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               </div>
             </div>
           ) : activeStage === "Book" ? (
-            <div className="overflow-y-auto h-full px-8 py-6">
+            <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Book Versions</h2>
@@ -1743,7 +1773,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               </div>
             </div>
           ) : (
-            <div className="overflow-y-auto h-full px-8 py-6">
+            <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <p className="text-sm text-[var(--text-faint)]">
                 Select a stage above.
               </p>
@@ -1761,7 +1791,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         >
           <div
             className="w-full"
-            style={{ maxWidth: 420, background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
+            style={{ maxWidth: 420, margin: "0 16px", background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="mb-5 text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit Project</h2>

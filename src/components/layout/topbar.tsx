@@ -1,7 +1,7 @@
-export function Topbar() {
+export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   return (
     <header
-      className="flex h-12 items-center justify-end px-6"
+      className="flex h-12 items-center justify-between px-6"
       style={{
         background: "var(--surface-1)",
         borderBottom: "1px solid var(--border-subtle)",
@@ -10,6 +10,28 @@ export function Topbar() {
         zIndex: 50,
       }}
     >
+      {/* Hamburger — mobile only */}
+      <button
+        className="desktop-hidden flex items-center justify-center"
+        onClick={onMenuToggle}
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 6,
+          background: "transparent",
+          border: "none",
+          color: "var(--text-secondary)",
+        }}
+        aria-label="Toggle navigation"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M3 5h12M3 9h12M3 13h12" />
+        </svg>
+      </button>
+
+      {/* Spacer for desktop (keeps avatar right-aligned) */}
+      <div className="mobile-hidden" />
+
       <div
         className="h-7 w-7 rounded-full"
         style={{ background: "rgba(255,255,255,0.06)" }}
