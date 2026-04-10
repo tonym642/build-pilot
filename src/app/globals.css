@@ -79,3 +79,39 @@ body {
   background: var(--surface-0);
   color: var(--text-primary);
 }
+
+/* ─── TipTap editor ───────────────────────────────────── */
+.tiptap {
+  outline: none;
+  min-height: 100%;
+  padding: 16px 20px;
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--text-secondary);
+}
+.tiptap p {
+  margin-bottom: 0.75em;
+}
+.tiptap p:last-child {
+  margin-bottom: 0;
+}
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-faint);
+  pointer-events: none;
+  height: 0;
+}
+
+/* Rendered HTML content in Manuscript / Publish */
+.prose-rendered {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--text-secondary);
+}
+.prose-rendered p {
+  margin-bottom: 0.75em;
+}
+.prose-rendered p:last-child {
+  margin-bottom: 0;
+}

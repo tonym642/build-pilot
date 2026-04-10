@@ -5,9 +5,17 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppMode from "./app-mode";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 
 
-const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
+const STAGES = ["Compose", "Manuscript", "Publish"] as const;
+
+/** Check if HTML content has any visible text */
+function hasContent(html: string): boolean {
+  if (!html) return false;
+  const stripped = html.replace(/<[^>]*>/g, "").trim();
+  return stripped.length > 0;
+}
 type Stage = (typeof STAGES)[number];
 
 type SectionId = string;
@@ -19,40 +27,62 @@ function sectionLabel(s: SectionId): string {
   return s;
 }
 
-type Message = {
+/* ─── AI message with metadata ──────────────────────────────── */
+
+type AiMessage = {
   id: number;
   role: "user" | "ai";
   text: string;
+  is_favorite: boolean;
+  is_liked: boolean;
+  is_disliked: boolean;
+  is_hidden: boolean;
+  is_deleted: boolean;
+  created_at: Date;
 };
 
-type BrainstormChat = {
+function newAiMessage(id: number, role: "user" | "ai", text: string): AiMessage {
+  return { id, role, text, is_favorite: false, is_liked: false, is_disliked: false, is_hidden: false, is_deleted: false, created_at: new Date() };
+}
+
+type AiFilter = "brainstorm" | "favorites" | "liked" | "disliked" | "hidden" | "trash";
+
+const AI_FILTERS: { key: AiFilter; label: string }[] = [
+  { key: "brainstorm", label: "Brainstorm" },
+  { key: "favorites", label: "Favorites" },
+  { key: "liked", label: "Liked" },
+  { key: "disliked", label: "Disliked" },
+  { key: "hidden", label: "Hidden" },
+  { key: "trash", label: "Trash" },
+];
+
+function filterMessages(messages: AiMessage[], filter: AiFilter): AiMessage[] {
+  switch (filter) {
+    case "brainstorm": return messages.filter((m) => !m.is_hidden && !m.is_deleted);
+    case "favorites": return messages.filter((m) => m.is_favorite && !m.is_deleted);
+    case "liked": return messages.filter((m) => m.is_liked && !m.is_deleted);
+    case "disliked": return messages.filter((m) => m.is_disliked && !m.is_deleted);
+    case "hidden": return messages.filter((m) => m.is_hidden && !m.is_deleted);
+    case "trash": return messages.filter((m) => m.is_deleted);
+    default: return messages;
+  }
+}
+
+/* ─── Chapter section type ──────────────────────────────────── */
+
+type ChapterSection = {
   id: string;
-  chapter: string;
-  title: string | null;
-  messages: Message[];
-  createdAt: Date;
+  name: string;
+  title: string;
 };
 
-type BrainstormChats = Record<string, BrainstormChat[]>;
-
-type CompilationItem = {
-  id: string;
-  content: string;
-  chapter: string;
-  createdAt: Date;
-  sourceMessageId: number;
-  isFavorite: boolean;
+type ChapterData = {
+  name: string;
+  title: string;
+  sections: ChapterSection[];
 };
 
-type DraftBlock = {
-  id: string;
-  content: string;
-  previousContent: string | null;
-  sourceCompilationId: string;
-  createdAt: Date;
-};
-
-type DraftBlocks = Record<string, DraftBlock[]>;
+/* ─── BookInfo ──────────────────────────────────────────────── */
 
 type BookInfo = {
   title: string;
@@ -77,6 +107,8 @@ const EMPTY_BOOK_INFO: BookInfo = {
   tone: "",
   genre: "",
 };
+
+/* ─── BookInfoPanel ─────────────────────────────────────────── */
 
 function BookInfoPanel({
   bookInfo,
@@ -135,78 +167,152 @@ function BookInfoPanel({
   );
 }
 
-const INITIAL_MESSAGES: Message[] = [];
+/* ─── AI Action Icons ───────────────────────────────────────── */
 
-function AiActions({
-  isAdded,
-  onSendToCompilation,
+function AiActionBar({
+  message,
+  onUpdate,
 }: {
-  isAdded: boolean;
-  onSendToCompilation: () => void;
+  message: AiMessage;
+  onUpdate: (updated: AiMessage) => void;
 }) {
+  function toggle(field: "is_favorite" | "is_liked" | "is_disliked" | "is_hidden" | "is_deleted") {
+    const updated = { ...message, [field]: !message[field] };
+    // Mutual exclusion: like/dislike
+    if (field === "is_liked" && updated.is_liked) updated.is_disliked = false;
+    if (field === "is_disliked" && updated.is_disliked) updated.is_liked = false;
+    onUpdate(updated);
+  }
+
+  const btnClass = "transition-colors";
+  const activeColor = "var(--text-primary)";
+  const inactiveColor = "var(--text-faint)";
+
   return (
-    <div className="mt-2 flex gap-4">
-      <button className="text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]">Like</button>
-      <button className="text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]">Favorite</button>
+    <div className="mt-2 flex items-center gap-3">
+      {/* Copy */}
       <button
-        onClick={onSendToCompilation}
-        disabled={isAdded}
-        className={[
-          "text-xs transition-colors",
-          isAdded ? "text-[var(--text-faint)] cursor-default" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]",
-        ].join(" ")}
+        title="Copy"
+        className={btnClass}
+        style={{ color: inactiveColor }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = inactiveColor)}
+        onClick={() => navigator.clipboard.writeText(message.text)}
       >
-        {isAdded ? "Added" : "Send to Compilation"}
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
       </button>
+
+      {/* Favorite */}
+      <button
+        title={message.is_favorite ? "Unfavorite" : "Favorite"}
+        className={btnClass}
+        style={{ color: message.is_favorite ? "#fbbf24" : inactiveColor }}
+        onMouseEnter={(e) => { if (!message.is_favorite) e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        onMouseLeave={(e) => { if (!message.is_favorite) e.currentTarget.style.color = inactiveColor; }}
+        onClick={() => toggle("is_favorite")}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill={message.is_favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      </button>
+
+      {/* Like */}
+      <button
+        title={message.is_liked ? "Unlike" : "Like"}
+        className={btnClass}
+        style={{ color: message.is_liked ? activeColor : inactiveColor }}
+        onMouseEnter={(e) => { if (!message.is_liked) e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        onMouseLeave={(e) => { if (!message.is_liked) e.currentTarget.style.color = inactiveColor; }}
+        onClick={() => toggle("is_liked")}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill={message.is_liked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+        </svg>
+      </button>
+
+      {/* Dislike */}
+      <button
+        title={message.is_disliked ? "Undo dislike" : "Dislike"}
+        className={btnClass}
+        style={{ color: message.is_disliked ? activeColor : inactiveColor }}
+        onMouseEnter={(e) => { if (!message.is_disliked) e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        onMouseLeave={(e) => { if (!message.is_disliked) e.currentTarget.style.color = inactiveColor; }}
+        onClick={() => toggle("is_disliked")}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill={message.is_disliked ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+        </svg>
+      </button>
+
+      {/* Hide */}
+      <button
+        title={message.is_hidden ? "Unhide" : "Hide"}
+        className={btnClass}
+        style={{ color: message.is_hidden ? activeColor : inactiveColor }}
+        onMouseEnter={(e) => { if (!message.is_hidden) e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        onMouseLeave={(e) => { if (!message.is_hidden) e.currentTarget.style.color = inactiveColor; }}
+        onClick={() => toggle("is_hidden")}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><line x1="1" y1="1" x2="23" y2="23" />
+        </svg>
+      </button>
+
+      {/* Trash */}
+      <button
+        title={message.is_deleted ? "Restore" : "Delete"}
+        className={btnClass}
+        style={{ color: message.is_deleted ? "#ef4444" : inactiveColor }}
+        onMouseEnter={(e) => { if (!message.is_deleted) e.currentTarget.style.color = "var(--text-tertiary)"; }}
+        onMouseLeave={(e) => { if (!message.is_deleted) e.currentTarget.style.color = inactiveColor; }}
+        onClick={() => toggle("is_deleted")}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+      </button>
+
+      {/* Timestamp */}
+      <span className="ml-auto text-[10px]" style={{ color: "var(--text-faint)" }}>
+        {message.created_at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+      </span>
     </div>
   );
 }
 
-function BrainstormingPanel({
+/* ─── AI Panel ──────────────────────────────────────────────── */
+
+function AiPanel({
+  messages,
+  onUpdateMessage,
   projectId,
   bookTitle,
   chapter,
-  messages,
-  activeChatId,
-  compilationItems,
-  onSendToCompilation,
   onAddMessage,
 }: {
+  messages: AiMessage[];
+  onUpdateMessage: (updated: AiMessage) => void;
   projectId: string;
   bookTitle: string;
   chapter: string;
-  messages: Message[];
-  activeChatId: string | null;
-  compilationItems: CompilationItem[];
-  onSendToCompilation: (message: Message, chapter: string) => void;
-  onAddMessage: (chatId: string, message: Message) => void;
+  onAddMessage: (message: AiMessage) => void;
 }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<AiFilter>("brainstorm");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const infoRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  useEffect(() => {
-    if (!showInfo) return;
-    function handleClick(e: MouseEvent) {
-      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
-        setShowInfo(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [showInfo]);
-
   async function handleSubmit() {
-    if (!activeChatId || !input.trim() || loading) return;
+    if (!input.trim() || loading) return;
     const trimmed = input.trim();
-    const userMsg: Message = { id: Date.now(), role: "user", text: trimmed };
-    onAddMessage(activeChatId, userMsg);
+    const userMsg = newAiMessage(Date.now(), "user", trimmed);
+    onAddMessage(userMsg);
     setInput("");
     setLoading(true);
 
@@ -214,25 +320,16 @@ function BrainstormingPanel({
       const res = await fetch("/api/brainstorm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: trimmed,
-          chapter,
-          bookTitle,
-          project_id: projectId,
-        }),
+        body: JSON.stringify({ message: trimmed, chapter, bookTitle, project_id: projectId }),
       });
       const data = await res.json();
-      onAddMessage(activeChatId, {
-        id: Date.now() + 1,
-        role: "ai",
-        text: res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again.",
-      });
+      onAddMessage(
+        newAiMessage(Date.now() + 1, "ai", res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again.")
+      );
     } catch {
-      onAddMessage(activeChatId, {
-        id: Date.now() + 1,
-        role: "ai",
-        text: "I couldn't generate a response right now. Please try again.",
-      });
+      onAddMessage(
+        newAiMessage(Date.now() + 1, "ai", "I couldn't generate a response right now. Please try again.")
+      );
     } finally {
       setLoading(false);
     }
@@ -245,85 +342,60 @@ function BrainstormingPanel({
     }
   }
 
+  const filtered = filterMessages(messages, activeFilter);
+
   return (
-    <div className="flex h-full flex-col px-8 mobile-px-4">
-      {/* Panel header */}
-      <div className="shrink-0 py-5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-lg font-medium tracking-tight">
-            <span className="text-[var(--text-primary)]">Brainstorming</span>
-            <span className="mx-2 text-[var(--text-faint)]">/</span>
-            <span className="text-[var(--text-secondary)]">{sectionLabel(chapter)}</span>
-          </h2>
-          {/* Info button + popover */}
-          <div className="relative ml-2" ref={infoRef}>
-            <button
-              onClick={() => setShowInfo((v) => !v)}
-              title="How this works"
-              className="flex h-4 w-4 items-center justify-center rounded-full border border-[var(--border-default)] text-[10px] text-[var(--text-faint)] transition-colors hover:border-[var(--border-hover)] hover:text-[var(--text-tertiary)]"
-            >
-              i
-            </button>
-            {showInfo && (
-              <div className="absolute left-0 top-6 z-20 w-72 rounded-[10px] border border-[var(--border-default)] bg-[var(--surface-3)] px-4 py-3 shadow-xl">
-                <p className="text-xs leading-relaxed text-[var(--text-tertiary)]">
-                  Share an idea, a question, or a direction for this chapter and we&apos;ll develop it together.
-                </p>
-                <p className="mt-2 text-xs leading-relaxed text-[var(--text-tertiary)]">
-                  You can start broad — a theme, a feeling, or a real story — or specific. Whatever&apos;s on your mind for this chapter.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Messages — scrollable, inside card */}
-      <div className="flex-1 min-h-0 overflow-hidden" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10 }}>
-        <div className="h-full overflow-y-auto px-5 py-4">
-          <div className="flex max-w-5xl flex-col gap-6 pb-4">
-            {messages.map((msg) => (
-              <div key={msg.id}>
-                {msg.role === "user" ? (
-                  <div className="flex justify-end">
-                    <p className="max-w-[60%] rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">
-                      {msg.text}
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
-                      {msg.text}
-                    </p>
-                    <AiActions
-                      isAdded={compilationItems.some((item) => item.sourceMessageId === msg.id)}
-                      onSendToCompilation={() => onSendToCompilation(msg, chapter)}
-                    />
-                  </div>
-                )}
-              </div>
-            ))}
-            <div ref={bottomRef} />
-          </div>
-        </div>
-      </div>
-
-      {/* Composer — pinned to bottom of panel */}
-      <div className="shrink-0 max-w-5xl py-4">
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 transition-colors focus-within:border-[rgba(90,154,245,0.35)] focus-within:bg-[rgba(255,255,255,0.05)]">
-          {/* Left: attach */}
+    <div className="flex h-full flex-col">
+      {/* Filter tabs */}
+      <div className="shrink-0 flex items-center gap-1 px-4 pt-3 pb-2" style={{ overflowX: "auto" }}>
+        {AI_FILTERS.map((f) => (
           <button
-            type="button"
-            aria-label="Attach"
-            className="mb-0.5 shrink-0 rounded-full p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
+            key={f.key}
+            onClick={() => setActiveFilter(f.key)}
+            className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${
+              activeFilter === f.key
+                ? "bg-[rgba(255,255,255,0.08)] text-[var(--text-primary)]"
+                : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"
+            }`}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="3" x2="8" y2="13" />
-              <line x1="3" y1="8" x2="13" y2="8" />
-            </svg>
+            {f.label}
           </button>
+        ))}
+      </div>
 
-          {/* Textarea */}
+      {/* Messages */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
+        <div className="flex flex-col gap-5 pb-4">
+          {filtered.map((msg) => (
+            <div key={msg.id}>
+              {msg.role === "user" ? (
+                <div className="flex justify-end">
+                  <p className="max-w-[85%] rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">
+                    {msg.text}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
+                    {msg.text}
+                  </p>
+                  <AiActionBar message={msg} onUpdate={onUpdateMessage} />
+                </div>
+              )}
+            </div>
+          ))}
+          {filtered.length === 0 && (
+            <p className="text-[12px] text-[var(--text-faint)] text-center py-8">
+              {activeFilter === "brainstorm" ? "Start a conversation with your AI assistant." : `No ${activeFilter} messages.`}
+            </p>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      {/* Composer */}
+      <div className="shrink-0 px-4 py-3">
+        <div className="flex items-end gap-2 rounded-2xl border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 transition-colors focus-within:border-[rgba(90,154,245,0.35)] focus-within:bg-[rgba(255,255,255,0.05)]">
           <textarea
             value={input}
             onChange={(e) => {
@@ -333,27 +405,11 @@ function BrainstormingPanel({
               el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Add an idea, ask a question, or give direction…"
+            placeholder="Ask a question or share an idea…"
             rows={1}
             style={{ minHeight: "1.5rem", maxHeight: "12.5rem" }}
             className="flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)] outline-none leading-relaxed"
           />
-
-          {/* Right: mic */}
-          <button
-            type="button"
-            aria-label="Microphone"
-            className="mb-0.5 shrink-0 rounded-full p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="5.5" y="1" width="5" height="8" rx="2.5" />
-              <path d="M3 7.5A5 5 0 0 0 13 7.5" />
-              <line x1="8" y1="12.5" x2="8" y2="15" />
-              <line x1="5.5" y1="15" x2="10.5" y2="15" />
-            </svg>
-          </button>
-
-          {/* Far right: voice OR send */}
           {loading ? (
             <div className="mb-0.5 shrink-0 flex h-7 w-7 items-center justify-center">
               <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--text-tertiary)]" />
@@ -365,465 +421,147 @@ function BrainstormingPanel({
               onClick={handleSubmit}
               className="mb-0.5 shrink-0 rounded-full bg-white p-1.5 text-black transition-opacity hover:opacity-80"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="8" y1="13" x2="8" y2="3" />
-                <polyline points="4,7 8,3 12,7" />
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="13" x2="8" y2="3" /><polyline points="4,7 8,3 12,7" />
               </svg>
             </button>
-          ) : (
-            <button
-              type="button"
-              aria-label="Voice conversation"
-              className="mb-0.5 shrink-0 rounded-full p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="8" cy="8" r="6.5" />
-                <path d="M5.5 8c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5" />
-                <circle cx="8" cy="8" r="1" fill="currentColor" stroke="none" />
-              </svg>
-            </button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
+/* ─── Compose Page (split layout) ───────────────────────────── */
 
-function CompilationPanel({
+function ComposePage({
   chapter,
-  items,
-  draftBlocks,
-  onAdd,
-  onToggleFavorite,
+  composeText,
+  onComposeChange,
+  aiMessages,
+  onUpdateAiMessage,
+  onAddAiMessage,
+  projectId,
+  bookTitle,
+  chapterTitle,
+  onChapterTitleChange,
 }: {
   chapter: string;
-  items: CompilationItem[];
-  draftBlocks: DraftBlocks;
-  onAdd: (item: CompilationItem) => void;
-  onToggleFavorite: (itemId: string) => void;
+  composeText: string;
+  onComposeChange: (text: string) => void;
+  aiMessages: AiMessage[];
+  onUpdateAiMessage: (updated: AiMessage) => void;
+  onAddAiMessage: (message: AiMessage) => void;
+  projectId: string;
+  bookTitle: string;
+  chapterTitle: string;
+  onChapterTitleChange: (title: string) => void;
 }) {
-  const [activeFilter, setActiveFilter] = useState<"all" | "favorites" | "recent">("all");
-  const chapterItems = items.filter((item) => item.chapter === chapter);
-  const addedSourceIds = new Set((draftBlocks[chapter] ?? []).map((b) => b.sourceCompilationId));
+  const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [dividerX, setDividerX] = useState(50); // percentage of total width for left side
+  const dragging = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  const filteredItems = (() => {
-    if (activeFilter === "favorites") return chapterItems.filter((i) => i.isFavorite);
-    if (activeFilter === "recent") return [...chapterItems].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return chapterItems;
-  })();
+  function handleMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    dragging.current = true;
 
-  const filters: { key: "all" | "favorites" | "recent"; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "favorites", label: "Favorites" },
-    { key: "recent", label: "Recent" },
-  ];
-
-  return (
-    <div className="flex h-full flex-col px-8 mobile-px-4">
-      <div className="shrink-0 py-5">
-        <h2 className="text-lg font-medium tracking-tight">
-          <span className="text-[var(--text-primary)]">Compilation</span>
-          <span className="mx-2 text-[var(--text-faint)]">/</span>
-          <span className="text-[var(--text-secondary)]">{sectionLabel(chapter)}</span>
-        </h2>
-      </div>
-      {/* Filter tabs */}
-      <div className="shrink-0 flex items-center gap-5 mb-4">
-        {filters.map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setActiveFilter(f.key)}
-            className={`text-xs transition-colors ${
-              activeFilter === f.key
-                ? "text-[var(--text-primary)]"
-                : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"
-            }`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-      <div className="flex-1 min-h-0 overflow-hidden" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10 }}>
-        {/* Card header */}
-        <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
-            Saved Ideas
-          </span>
-        </div>
-        <div className="h-full overflow-y-auto px-4 py-3" style={{ maxHeight: "calc(100% - 34px)" }}>
-          {filteredItems.length === 0 ? (
-            <p className="mt-2 text-[13px] text-[var(--text-faint)]">
-              {activeFilter === "favorites"
-                ? "No favorites yet. Click the star on any card to save it here."
-                : "No saved ideas yet. Send Brainstorming responses here to start building your compilation."}
-            </p>
-          ) : (
-            <div className="flex max-w-5xl flex-col gap-3 pb-6">
-              {filteredItems.map((item) => {
-                const isAdded = addedSourceIds.has(item.id);
-                return (
-                  <div
-                    key={item.id}
-                    className="rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-5 py-4"
-                  >
-                    <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
-                      {item.content}
-                    </p>
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {/* Favorite toggle */}
-                        <button
-                          onClick={() => onToggleFavorite(item.id)}
-                          title={item.isFavorite ? "Unfavorite" : "Favorite"}
-                          className="transition-colors"
-                        >
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill={item.isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={item.isFavorite ? "text-amber-400" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}>
-                            <polygon points="7,1 8.9,5.1 13.4,5.5 10.1,8.4 11.1,12.9 7,10.4 2.9,12.9 3.9,8.4 0.6,5.5 5.1,5.1"/>
-                          </svg>
-                        </button>
-                        <span className="text-xs text-[var(--text-faint)]">
-                          {item.createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      {isAdded ? (
-                        <span className="text-xs text-[var(--text-faint)]">Added</span>
-                      ) : (
-                        <button
-                          onClick={() => onAdd(item)}
-                          className="text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                        >
-                          Add to Draft
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DraftPanel({
-  chapter,
-  draftBlocks,
-  compilationItems,
-  onRemove,
-  onInsert,
-  onEditBlock,
-  onReorder,
-  onMergeDown,
-  onAiAssist,
-  onUndo,
-}: {
-  chapter: string;
-  draftBlocks: DraftBlocks;
-  compilationItems: CompilationItem[];
-  onRemove: (chapter: string, blockId: string) => void;
-  onInsert: (item: CompilationItem) => void;
-  onEditBlock: (chapter: string, blockId: string, newContent: string) => void;
-  onReorder: (chapter: string, blockId: string, direction: "up" | "down") => void;
-  onMergeDown: (chapter: string, blockId: string) => void;
-  onAiAssist: (chapter: string, blockId: string, action: "rewrite" | "expand" | "shorten") => Promise<void>;
-  onUndo: (chapter: string, blockId: string) => void;
-}) {
-  const blocks = draftBlocks[chapter] ?? [];
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState("");
-  const [assistingId, setAssistingId] = useState<string | null>(null);
-  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
-  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    const el = editTextareaRef.current;
-    if (el) {
-      el.style.height = "auto";
-      el.style.height = `${el.scrollHeight}px`;
+    function handleMouseMove(ev: MouseEvent) {
+      if (!dragging.current || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setDividerX(Math.max(25, Math.min(75, pct)));
     }
-  }, [editingId, editingText]);
-  const chapterCompilationItems = compilationItems.filter((item) => item.chapter === chapter);
-  const insertedSourceIds = new Set(blocks.map((b) => b.sourceCompilationId));
 
-  function handleInsert(item: CompilationItem) {
-    onInsert(item);
-    setShowModal(false);
+    function handleMouseUp() {
+      dragging.current = false;
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    }
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
   }
 
   return (
-    <div className="flex h-full flex-col px-8 mobile-px-4">
-      <div className="shrink-0 py-5">
-        <h2 className="text-lg font-medium tracking-tight">
-          <span className="text-[var(--text-primary)]">Draft</span>
-          <span className="mx-2 text-[var(--text-faint)]">/</span>
-          <span className="text-[var(--text-secondary)]">{sectionLabel(chapter)}</span>
-        </h2>
+    <div ref={containerRef} className="flex h-full min-h-0">
+      {/* Left: text writing area */}
+      <div
+        className="flex flex-col min-h-0"
+        style={{ width: aiPanelOpen ? `${dividerX}%` : "100%" }}
+      >
+        <div className="flex-1 min-h-0 px-6 pb-6">
+          <RichTextEditor
+            content={composeText}
+            onChange={onComposeChange}
+            label={sectionLabel(chapter)}
+            titleValue={chapterTitle}
+            onTitleChange={onChapterTitleChange}
+            placeholder="Start writing…"
+          />
+        </div>
       </div>
 
-      {/* Modal overlay */}
-      {showModal && (
+      {/* Draggable divider */}
+      {aiPanelOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          onClick={() => setShowModal(false)}
+          className="shrink-0 flex items-center justify-center"
+          style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }}
+          onMouseDown={handleMouseDown}
         >
-          <div
-            className="w-full max-w-lg rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] px-6 py-5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+          {/* Toggle button */}
+          <button
+            onClick={() => setAiPanelOpen(false)}
+            title="Close AI panel"
+            className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]"
+            style={{ width: 22, height: 22, zIndex: 11 }}
           >
-            {/* Modal header */}
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-[13px] font-semibold tracking-tight">Insert from Compilation</h3>
-                <p className="mt-0.5 text-xs text-[var(--text-muted)]">{chapter}</p>
-              </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="rounded-lg p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]"
-                aria-label="Close"
-              >
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                  <line x1="2" y1="2" x2="12" y2="12" />
-                  <line x1="12" y1="2" x2="2" y2="12" />
-                </svg>
-              </button>
-            </div>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <polyline points="3,1 7,5 3,9" />
+            </svg>
+          </button>
+        </div>
+      )}
 
-            {/* Modal content */}
-            {chapterCompilationItems.length === 0 ? (
-              <p className="text-[13px] text-[var(--text-faint)]">No Compilation items for {chapter} yet.</p>
-            ) : (
-              <div className="flex max-h-96 flex-col gap-1 overflow-y-auto">
-                {chapterCompilationItems.map((item) => {
-                  const alreadyIn = insertedSourceIds.has(item.id);
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-start gap-4 rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
-                    >
-                      <p className={[
-                        "flex-1 text-[13px] leading-relaxed",
-                        alreadyIn ? "text-[var(--text-faint)]" : "text-[var(--text-secondary)]",
-                      ].join(" ")}>
-                        {item.content}
-                      </p>
-                      <div className="shrink-0 pt-0.5">
-                        {alreadyIn ? (
-                          <span className="text-xs text-[var(--text-faint)]">Already in Draft</span>
-                        ) : (
-                          <button
-                            onClick={() => handleInsert(item)}
-                            className="text-xs text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]"
-                          >
-                            Insert
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+      {/* Toggle button when AI panel is closed */}
+      {!aiPanelOpen && (
+        <div className="shrink-0 flex items-center" style={{ position: "relative", width: 16 }}>
+          <button
+            onClick={() => setAiPanelOpen(true)}
+            title="Open AI panel"
+            className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]"
+            style={{ width: 22, height: 22, right: -11, zIndex: 11 }}
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <polyline points="7,1 3,5 7,9" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* Right: AI assistant panel */}
+      {aiPanelOpen && (
+        <div
+          className="min-h-0 flex flex-col pr-6 pb-6"
+          style={{ width: `${100 - dividerX}%` }}
+        >
+          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)]">
+            <AiPanel
+              messages={aiMessages}
+              onUpdateMessage={onUpdateAiMessage}
+              projectId={projectId}
+              bookTitle={bookTitle}
+              chapter={chapter}
+              onAddMessage={onAddAiMessage}
+            />
           </div>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-hidden" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10 }}>
-        {/* Card header */}
-        <div className="flex items-center justify-between" style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
-            Draft Blocks
-          </span>
-          <button
-            onClick={() => setShowModal(true)}
-            className="rounded-lg border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] px-3 py-1 text-[10px] font-medium text-[var(--text-tertiary)] transition-colors hover:border-[var(--border-hover)] hover:text-[var(--text-secondary)]"
-          >
-            Insert from Compilation
-          </button>
-        </div>
-        <div className="h-full overflow-y-auto px-4 py-3" style={{ maxHeight: "calc(100% - 34px)" }}>
-          {blocks.length === 0 ? (
-            <p className="mt-2 text-[13px] text-[var(--text-faint)]">
-              No draft content yet. Move ideas from Compilation to start assembling your draft.
-            </p>
-          ) : (
-            <div className="flex max-w-3xl flex-col gap-3 pb-6">
-            {blocks.map((block, index) => {
-              const isEditing = editingId === block.id;
-              const isFirst = index === 0;
-              const isLast = index === blocks.length - 1;
-              return (
-                <div
-                  key={block.id}
-                  className="rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-5 py-4"
-                >
-                  {isEditing ? (
-                    <>
-                      <textarea
-                        ref={editTextareaRef}
-                        value={editingText}
-                        onChange={(e) => {
-                          setEditingText(e.target.value);
-                          const el = e.target;
-                          el.style.height = "auto";
-                          el.style.height = `${el.scrollHeight}px`;
-                        }}
-                        rows={1}
-                        style={{ overflow: "hidden" }}
-                        className="w-full resize-none bg-[rgba(255,255,255,0.04)] rounded-lg px-3 py-2.5 text-[13px] leading-relaxed text-[var(--text-secondary)] placeholder-[var(--text-faint)] outline-none border border-[var(--border-default)] focus:border-[rgba(90,154,245,0.35)]"
-                      />
-                      <div className="mt-2.5 flex items-center justify-end gap-4">
-                        <button
-                          onClick={() => setEditingId(null)}
-                          className="text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          onClick={() => {
-                            onEditBlock(chapter, block.id, editingText);
-                            setEditingId(null);
-                          }}
-                          className="text-xs text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-primary)]"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
-                        {block.content}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xs text-[var(--text-faint)]">
-                          {block.createdAt.toLocaleDateString([], { month: "short", day: "numeric" })} &middot;{" "}
-                          {block.createdAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                        </span>
-                        <div className="flex items-center gap-3">
-                          {/* ── Up / Down / Merge (reorder) ── */}
-                          {!isFirst && (
-                            <button
-                              onClick={() => onReorder(chapter, block.id, "up")}
-                              title="Move up"
-                              className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                            >
-                              {/* Up arrow */}
-                              <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="11" x2="7" y2="3"/><polyline points="4,6 7,3 10,6"/></svg>
-                              </button>
-                          )}
-                          {!isLast && (
-                            <button
-                              onClick={() => onReorder(chapter, block.id, "down")}
-                              title="Move down"
-                              className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                            >
-                              {/* Down arrow */}
-                              <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="3" x2="7" y2="11"/><polyline points="4,8 7,11 10,8"/></svg>
-                              </button>
-                          )}
-                          {!isLast && (
-                            <button
-                              onClick={() => onMergeDown(chapter, block.id)}
-                              title="Merge down"
-                              className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                            >
-                              {/* Merge icon: two lines joining */}
-                              <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2 L7 7 L11 2"/><line x1="7" y1="7" x2="7" y2="12"/></svg>
-                              </button>
-                          )}
-
-                          {/* ── AI actions ── */}
-                          {assistingId === block.id ? (
-                            <span className="text-xs text-[var(--text-faint)]">Working…</span>
-                          ) : (
-                            <>
-                              {(["Rewrite", "Expand", "Shorten"] as const).map((action) => {
-                                const icons: Record<string, React.ReactNode> = {
-                                  Rewrite: <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M2 7 Q4 2 7 4 Q10 6 11 3"/><polyline points="9,2 11,3 10,5"/></svg>,
-                                  Expand:  <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="7" y1="2" x2="7" y2="12"/><line x1="2" y1="7" x2="12" y2="7"/></svg>,
-                                  Shorten: <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="11" y2="4"/><line x1="3" y1="7" x2="9" y2="7"/><line x1="3" y1="10" x2="6" y2="10"/></svg>,
-                                };
-                                return (
-                                  <button
-                                    key={action}
-                                    onClick={async () => {
-                                      setAssistingId(block.id);
-                                      await onAiAssist(chapter, block.id, action.toLowerCase() as "rewrite" | "expand" | "shorten");
-                                      setAssistingId(null);
-                                    }}
-                                    disabled={!!assistingId}
-                                    title={`Ai ${action.toLowerCase()}`}
-                                    className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)] disabled:opacity-40"
-                                  >
-                                    {icons[action]}
-                                    </button>
-                                );
-                              })}
-                              {block.previousContent !== null && (
-                                <button
-                                  onClick={() => onUndo(chapter, block.id)}
-                                  title="Undo"
-                                  className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                                >
-                                  {/* Undo arrow */}
-                                  <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7 Q3 3 8 3 Q12 3 12 7 Q12 11 8 11 L5 11"/><polyline points="3,9 3,7 5,7"/></svg>
-                                  </button>
-                              )}
-                            </>
-                          )}
-
-                          {/* ── Edit / Remove ── */}
-                          <button
-                            onClick={() => { setEditingId(block.id); setEditingText(block.content); }}
-                            title="Edit"
-                            className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                          >
-                            {/* Pencil */}
-                            <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9.5 2.5 L11.5 4.5 L5 11 L2 12 L3 9 Z"/><line x1="8" y1="4" x2="10" y2="6"/></svg>
-                            </button>
-                          {confirmRemoveId === block.id ? (
-                            <span className="flex items-center gap-2">
-                              <span className="text-xs text-[var(--text-muted)]">Remove?</span>
-                              <button
-                                onClick={() => { onRemove(chapter, block.id); setConfirmRemoveId(null); }}
-                                className="text-xs text-red-400/70 transition-colors hover:text-red-400"
-                              >
-                                Yes
-                              </button>
-                              <button
-                                onClick={() => setConfirmRemoveId(null)}
-                                className="text-xs text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                              >
-                                No
-                              </button>
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmRemoveId(block.id)}
-                              title="Remove"
-                              className="text-[var(--text-faint)] transition-colors hover:text-[var(--text-tertiary)]"
-                            >
-                              {/* Trash */}
-                              <svg className="" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,4 11,4"/><path d="M5 4 L5 11 Q5 12 6 12 L8 12 Q9 12 9 11 L9 4"/><path d="M5.5 4 L5.5 2.5 Q5.5 2 6 2 L8 2 Q8.5 2 8.5 2.5 L8.5 4"/></svg>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-        </div>
-      </div>
     </div>
   );
 }
+
+/* ─── Main ProjectPage ──────────────────────────────────────── */
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = use(params);
@@ -835,27 +573,29 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [activeStage, setActiveStage] = useState<Stage>(() => {
     const stageParam = searchParams.get("stage");
     if (stageParam && STAGES.includes(stageParam as Stage)) return stageParam as Stage;
-    return "Brainstorming";
+    return "Compose";
   });
   const [activeSection, setActiveSection] = useState<SectionId>("Chapter 1");
-  const [chapters, setChapters] = useState<string[]>(["Chapter 1", "Chapter 2", "Chapter 3"]);
+  const [chapters, setChapters] = useState<ChapterData[]>([
+    { name: "Chapter 1", title: "", sections: [] },
+    { name: "Chapter 2", title: "", sections: [] },
+    { name: "Chapter 3", title: "", sections: [] },
+  ]);
   const [confirmRemoveChapter, setConfirmRemoveChapter] = useState<string | null>(null);
-  const [brainstormChats, setBrainstormChats] = useState<BrainstormChats>({});
-  const [activeChatIds, setActiveChatIds] = useState<Record<string, string>>({});
-  const [compilationItems, setCompilationItems] = useState<CompilationItem[]>([]);
-  const [draftBlocks, setDraftBlocks] = useState<DraftBlocks>({});
+  const [aiMessages, setAiMessages] = useState<Record<string, AiMessage[]>>({});
+  const [composeTexts, setComposeTexts] = useState<Record<string, string>>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
-  const [bookStructure, setBookStructure] = useState<{ id: string; type: string; title: string; position: number }[]>([]);
   const [bookVersions, setBookVersions] = useState<{ id: string; version_number: number; source: string; status: string; created_at: string; derived_status?: string }[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
 
   // Close mobile sidebar when section changes
   useEffect(() => {
     setMobileSidebarOpen(false);
   }, [activeSection, activeStage]);
 
-  // Load project record via API
+  // Load project record
   useEffect(() => {
     if (!projectId) return;
     fetch(`/api/projects/${projectId}`)
@@ -871,13 +611,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       });
   }, [projectId]);
 
-  // Load persisted messages from Supabase on mount
+  // Load persisted messages from Supabase
   useEffect(() => {
     if (!projectId) return;
     async function loadMessages() {
       const res = await fetch(`/api/projects/${projectId}/messages`);
       const data = await res.json();
-
       if (!Array.isArray(data) || data.length === 0) {
         setMessagesLoaded(true);
         return;
@@ -890,43 +629,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         grouped[chapter].push(row);
       }
 
-      const newChats: BrainstormChats = {};
-      const newChatIds: Record<string, string> = {};
-
+      const newMessages: Record<string, AiMessage[]> = {};
       for (const [chapter, rows] of Object.entries(grouped)) {
-        const chatId = crypto.randomUUID();
-        const messages: Message[] = rows.map((row, i) => ({
-          id: i + 1,
-          role: (row.role === "assistant" ? "ai" : "user") as Message["role"],
-          text: row.message,
-        }));
-        const chat: BrainstormChat = {
-          id: chatId,
-          chapter,
-          title: null,
-          messages,
-          createdAt: new Date(rows[0].created_at),
-        };
-        newChats[chapter] = [chat];
-        newChatIds[chapter] = chatId;
+        newMessages[chapter] = rows.map((row: Record<string, unknown>, i: number) =>
+          newAiMessage(
+            i + 1,
+            (row.role === "assistant" ? "ai" : "user") as AiMessage["role"],
+            row.message as string
+          )
+        );
       }
 
-      // Merge: Supabase data wins for chapters that have no user-sent messages yet
-      setBrainstormChats((prev) => {
-        const merged: BrainstormChats = { ...prev };
-        for (const [chapter, chatList] of Object.entries(newChats)) {
-          const existingHasContent = (merged[chapter] ?? []).some((c) => c.messages.length > 0);
-          if (!existingHasContent) {
-            merged[chapter] = chatList;
-          }
-        }
-        return merged;
-      });
-      setActiveChatIds((prev) => {
+      setAiMessages((prev) => {
         const merged = { ...prev };
-        for (const [chapter, chatId] of Object.entries(newChatIds)) {
-          if (!prev[chapter]) {
-            merged[chapter] = chatId;
+        for (const [chapter, msgs] of Object.entries(newMessages)) {
+          if (!merged[chapter] || merged[chapter].length === 0) {
+            merged[chapter] = msgs;
           }
         }
         return merged;
@@ -937,118 +655,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  // Load compilation items from Supabase on mount
-  useEffect(() => {
-    if (!projectId) return;
-    fetch(`/api/projects/${projectId}/compilations`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const items: CompilationItem[] = data.map((row: Record<string, unknown>) => ({
-            id: row.id as string,
-            content: row.content as string,
-            chapter: row.chapter as string,
-            createdAt: new Date(row.created_at as string),
-            sourceMessageId: (row.source_message_id as number) ?? 0,
-            isFavorite: (row.is_favorite as boolean) ?? false,
-          }));
-          setCompilationItems(items);
-        }
-      });
-  }, [projectId]);
-
-  // Load draft blocks from Supabase on mount
-  useEffect(() => {
-    if (!projectId) return;
-    fetch(`/api/projects/${projectId}/drafts`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const grouped: DraftBlocks = {};
-          for (const row of data) {
-            const chapter = row.chapter as string;
-            if (!grouped[chapter]) grouped[chapter] = [];
-            grouped[chapter].push({
-              id: row.id as string,
-              content: row.content as string,
-              previousContent: (row.previous_content as string) ?? null,
-              sourceCompilationId: (row.source_compilation_id as string) ?? "",
-              createdAt: new Date(row.created_at as string),
-            });
-          }
-          setDraftBlocks(grouped);
-        }
-      });
-  }, [projectId]);
-
-  // Auto-save compilation items (debounced)
-  const compilationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const compilationLoadedRef = useRef(false);
-
-  useEffect(() => {
-    // Skip the initial load-triggered update
-    if (!compilationLoadedRef.current) {
-      compilationLoadedRef.current = true;
-      return;
-    }
-    if (compilationTimerRef.current) clearTimeout(compilationTimerRef.current);
-    compilationTimerRef.current = setTimeout(() => {
-      fetch(`/api/projects/${projectId}/compilations`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: compilationItems }),
-      });
-    }, 800);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [compilationItems]);
-
-  // Auto-save draft blocks (debounced)
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftLoadedRef = useRef(false);
-
-  useEffect(() => {
-    // Skip the initial load-triggered update
-    if (!draftLoadedRef.current) {
-      draftLoadedRef.current = true;
-      return;
-    }
-    // Flatten draftBlocks into array with chapter info
-    const allBlocks: Record<string, unknown>[] = [];
-    for (const [chapter, blocks] of Object.entries(draftBlocks)) {
-      for (const block of blocks) {
-        allBlocks.push({ ...block, chapter });
-      }
-    }
-    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = setTimeout(() => {
-      fetch(`/api/projects/${projectId}/drafts`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blocks: allBlocks }),
-      });
-    }, 800);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftBlocks]);
-
-  // Load book structure from Supabase on mount, repair ordering
-  useEffect(() => {
-    if (!projectId) return;
-    // Repair positions first, then load
-    fetch(`/api/projects/${projectId}/structure`, { method: "PATCH" })
-      .then(() => fetch(`/api/projects/${projectId}/structure`))
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const sorted = [...data].sort(
-            (a: { position?: number }, b: { position?: number }) =>
-              (a.position ?? 0) - (b.position ?? 0)
-          );
-          setBookStructure(sorted);
-        }
-      });
-  }, [projectId]);
-
-  // Load book versions from Supabase on mount
+  // Load book versions
   useEffect(() => {
     if (!projectId) return;
     loadBookVersions();
@@ -1061,262 +668,159 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     if (Array.isArray(data)) setBookVersions(data);
   }
 
-  // Auto-create or restore chat when entering Brainstorming for a section
-  useEffect(() => {
-    if (!messagesLoaded) return;
-    if (activeStage !== "Brainstorming") return;
-    const sectionChats = brainstormChats[activeSection] ?? [];
-    if (sectionChats.length === 0) {
-      const chat: BrainstormChat = {
-        id: crypto.randomUUID(),
-        chapter: activeSection,
-        title: null,
-        messages: [...INITIAL_MESSAGES],
-        createdAt: new Date(),
-      };
-      setBrainstormChats((prev) => ({ ...prev, [activeSection]: [chat] }));
-      setActiveChatIds((prev) => ({ ...prev, [activeSection]: chat.id }));
-    } else if (!activeChatIds[activeSection]) {
-      const latest = [...sectionChats].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-      setActiveChatIds((prev) => ({ ...prev, [activeSection]: latest.id }));
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, activeSection, messagesLoaded]);
-
-  // Save book info to Supabase with debounce
+  // Save book info with debounce
   const bookInfoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   const handleBookInfoChange = useCallback((updated: BookInfo) => {
     setBookInfo(updated);
+    // Sync project name from book title
+    if (updated.title.trim()) {
+      setProjectName(updated.title.trim());
+    }
     if (bookInfoTimerRef.current) clearTimeout(bookInfoTimerRef.current);
     bookInfoTimerRef.current = setTimeout(() => {
+      const patch: Record<string, unknown> = { id: projectId, book_info: updated };
+      if (updated.title.trim()) patch.name = updated.title.trim();
       fetch("/api/projects", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: projectId, book_info: updated }),
+        body: JSON.stringify(patch),
       });
     }, 800);
   }, [projectId]);
 
-  function handleNewBrainstormChat(chapter: string) {
-    const chat: BrainstormChat = {
-      id: crypto.randomUUID(),
-      chapter,
-      title: null,
-      messages: [...INITIAL_MESSAGES],
-      createdAt: new Date(),
-    };
-    setBrainstormChats((prev) => ({ ...prev, [chapter]: [...(prev[chapter] ?? []), chat] }));
-    setActiveChatIds((prev) => ({ ...prev, [chapter]: chat.id }));
-  }
+  // Auto-save compose texts (debounced)
+  const composeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const composeLoadedRef = useRef(false);
 
-  function handleSelectBrainstormChat(chapter: string, chatId: string) {
-    setActiveChatIds((prev) => ({ ...prev, [chapter]: chatId }));
-  }
-
-  function handleAddBrainstormMessage(chapter: string, chatId: string, message: Message) {
-    setBrainstormChats((prev) => ({
-      ...prev,
-      [chapter]: (prev[chapter] ?? []).map((c) => {
-        if (c.id !== chatId) return c;
-        if (c.messages.some((m) => m.id === message.id)) return c;
-        return { ...c, messages: [...c.messages, message] };
-      }),
-    }));
-  }
-
-  function handleSendToCompilation(message: Message, chapter: string) {
-    const alreadyAdded = compilationItems.some((item) => item.sourceMessageId === message.id);
-    if (alreadyAdded) return;
-    setCompilationItems((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        content: message.text,
-        chapter,
-        createdAt: new Date(),
-        sourceMessageId: message.id,
-        isFavorite: false,
-      },
-    ]);
-  }
-
-  function handleToggleFavorite(itemId: string) {
-    setCompilationItems((prev) =>
-      prev.map((item) => item.id === itemId ? { ...item, isFavorite: !item.isFavorite } : item)
-    );
-  }
-
-  function handleMoveToDraft(selectedItems: CompilationItem[]) {
-    if (selectedItems.length === 0) return;
-    setDraftBlocks((prev) => {
-      const chapter = selectedItems[0].chapter;
-      const existing = prev[chapter] ?? [];
-      const existingSourceIds = new Set(existing.map((b) => b.sourceCompilationId));
-      const newBlocks: DraftBlock[] = selectedItems
-        .filter((item) => !existingSourceIds.has(item.id))
-        .map((item) => ({
-          id: crypto.randomUUID(),
-          content: item.content,
-          previousContent: null,
-          sourceCompilationId: item.id,
-          createdAt: new Date(),
-        }));
-      return { ...prev, [chapter]: [...existing, ...newBlocks] };
-    });
-  }
-
-  function handleInsertIntoDraft(item: CompilationItem) {
-    setDraftBlocks((prev) => {
-      const existing = prev[item.chapter] ?? [];
-      if (existing.some((b) => b.sourceCompilationId === item.id)) return prev;
-      return {
-        ...prev,
-        [item.chapter]: [
-          ...existing,
-          {
-            id: crypto.randomUUID(),
-            content: item.content,
-            previousContent: null,
-            sourceCompilationId: item.id,
-            createdAt: new Date(),
-          },
-        ],
-      };
-    });
-  }
-
-  async function handleAiAssistBlock(
-    chapter: string,
-    blockId: string,
-    action: "rewrite" | "expand" | "shorten"
-  ) {
-    const block = (draftBlocks[chapter] ?? []).find((b) => b.id === blockId);
-    if (!block) return;
-    try {
-      const res = await fetch("/api/draft-assist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: block.content, action, chapter, bookTitle: projectName || bookInfo.title || "this book" }),
-      });
-      const data = await res.json();
-      if (res.ok && data.result) {
-        setDraftBlocks((prev) => ({
-          ...prev,
-          [chapter]: (prev[chapter] ?? []).map((b) =>
-            b.id === blockId ? { ...b, previousContent: b.content, content: data.result } : b
-          ),
-        }));
-      }
-    } catch {
-      // silently fail — block content unchanged
+  useEffect(() => {
+    if (!composeLoadedRef.current) {
+      composeLoadedRef.current = true;
+      return;
     }
-  }
+    if (composeTimerRef.current) clearTimeout(composeTimerRef.current);
+    composeTimerRef.current = setTimeout(() => {
+      // Flatten compose texts into draft blocks for persistence
+      const allBlocks: Record<string, unknown>[] = [];
+      for (const [chapter, text] of Object.entries(composeTexts)) {
+        if (hasContent(text)) {
+          allBlocks.push({
+            id: crypto.randomUUID(),
+            chapter,
+            content: text,
+            previousContent: null,
+            sourceCompilationId: null,
+          });
+        }
+      }
+      fetch(`/api/projects/${projectId}/drafts`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks: allBlocks }),
+      });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [composeTexts]);
 
-  function handleUndoBlock(chapter: string, blockId: string) {
-    setDraftBlocks((prev) => ({
+  // Load compose texts from drafts API on mount
+  useEffect(() => {
+    if (!projectId) return;
+    fetch(`/api/projects/${projectId}/drafts`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          const texts: Record<string, string> = {};
+          for (const row of data) {
+            const chapter = row.chapter as string;
+            // Combine blocks for the same chapter
+            texts[chapter] = texts[chapter]
+              ? texts[chapter] + "\n\n" + (row.content as string)
+              : (row.content as string);
+          }
+          setComposeTexts(texts);
+        }
+      });
+  }, [projectId]);
+
+  function handleAddAiMessage(chapter: string, message: AiMessage) {
+    setAiMessages((prev) => ({
       ...prev,
-      [chapter]: (prev[chapter] ?? []).map((b) =>
-        b.id === blockId && b.previousContent !== null
-          ? { ...b, content: b.previousContent, previousContent: null }
-          : b
-      ),
+      [chapter]: [...(prev[chapter] ?? []), message],
     }));
   }
 
-  function handleMergeBlock(chapter: string, blockId: string) {
-    setDraftBlocks((prev) => {
-      const arr = [...(prev[chapter] ?? [])];
-      const idx = arr.findIndex((b) => b.id === blockId);
-      if (idx === -1 || idx >= arr.length - 1) return prev;
-      const merged: DraftBlock = {
-        ...arr[idx],
-        content: arr[idx].content + "\n\n" + arr[idx + 1].content,
-      };
-      arr.splice(idx, 2, merged);
-      return { ...prev, [chapter]: arr };
-    });
-  }
-
-  function handleReorderBlock(chapter: string, blockId: string, direction: "up" | "down") {
-    setDraftBlocks((prev) => {
-      const arr = [...(prev[chapter] ?? [])];
-      const idx = arr.findIndex((b) => b.id === blockId);
-      if (idx === -1) return prev;
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (swapIdx < 0 || swapIdx >= arr.length) return prev;
-      [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
-      return { ...prev, [chapter]: arr };
-    });
-  }
-
-  function handleEditBlock(chapter: string, blockId: string, newContent: string) {
-    setDraftBlocks((prev) => ({
+  function handleUpdateAiMessage(chapter: string, updated: AiMessage) {
+    setAiMessages((prev) => ({
       ...prev,
-      [chapter]: (prev[chapter] ?? []).map((b) =>
-        b.id === blockId ? { ...b, content: newContent } : b
-      ),
+      [chapter]: (prev[chapter] ?? []).map((m) => m.id === updated.id ? updated : m),
     }));
   }
 
-  function handleRemoveFromDraft(chapter: string, blockId: string) {
-    setDraftBlocks((prev) => ({
-      ...prev,
-      [chapter]: (prev[chapter] ?? []).filter((b) => b.id !== blockId),
-    }));
+  function handleComposeChange(chapter: string, text: string) {
+    setComposeTexts((prev) => ({ ...prev, [chapter]: text }));
   }
 
   function handleAddChapter() {
     setChapters((prev) => {
       const next = prev.length + 1;
-      return [...prev, `Chapter ${next}`];
+      return [...prev, { name: `Chapter ${next}`, title: "", sections: [] }];
     });
   }
 
-  async function loadBookStructure() {
-    const res = await fetch(`/api/projects/${projectId}/structure`);
-    const data = await res.json();
-    if (Array.isArray(data)) {
-      const sorted = [...data].sort(
-        (a: { position?: number }, b: { position?: number }) =>
-          (a.position ?? 0) - (b.position ?? 0)
-      );
-      setBookStructure(sorted);
-    }
+  function handleAddSection(chapterName: string) {
+    setChapters((prev) =>
+      prev.map((ch) => {
+        if (ch.name !== chapterName) return ch;
+        const sectionNum = ch.sections.length + 1;
+        return {
+          ...ch,
+          sections: [...ch.sections, { id: crypto.randomUUID(), name: `Section ${sectionNum}`, title: "" }],
+        };
+      })
+    );
   }
 
-  async function handleAddStructureChapter() {
-    const res = await fetch(`/api/projects/${projectId}/structure`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "chapter" }),
-    });
-    if (res.ok) {
-      await loadBookStructure();
-    }
+  function handleRenameChapter(chapterName: string, newTitle: string) {
+    setChapters((prev) =>
+      prev.map((ch) => ch.name === chapterName ? { ...ch, title: newTitle } : ch)
+    );
   }
 
-  const [sendingToBook, setSendingToBook] = useState(false);
-  const [sendToBookSuccess, setSendToBookSuccess] = useState(false);
+  function handleRenameSection(chapterName: string, sectionId: string, newTitle: string) {
+    setChapters((prev) =>
+      prev.map((ch) => {
+        if (ch.name !== chapterName) return ch;
+        return {
+          ...ch,
+          sections: ch.sections.map((s) => s.id === sectionId ? { ...s, title: newTitle } : s),
+        };
+      })
+    );
+  }
 
-  async function handleSendToBook() {
-    setSendingToBook(true);
-    setSendToBookSuccess(false);
+  function toggleChapterExpanded(chapterName: string) {
+    setExpandedChapters((prev) => ({ ...prev, [chapterName]: !prev[chapterName] }));
+  }
 
-    // Gather all manuscript sections in order (exclude book_info — internal only)
-    const orderedSections = ["prologue", ...chapters, "epilogue"];
+  const [sendingToPublish, setSendingToPublish] = useState(false);
+  const [sendToPublishSuccess, setSendToPublishSuccess] = useState(false);
+
+  async function handleSendToPublish() {
+    setSendingToPublish(true);
+    setSendToPublishSuccess(false);
+
+    const orderedSections = ["prologue", ...chapters.map((c) => c.name), "epilogue"];
     const sections: { section_type: string; section_title: string; position: number; content: string }[] = [];
     let position = 0;
 
     for (const s of orderedSections) {
-      const blocks = draftBlocks[s] ?? [];
-      if (blocks.length > 0) {
+      const text = composeTexts[s];
+      if (text && hasContent(text)) {
         const type = s === "prologue" ? "prologue" : s === "epilogue" ? "epilogue" : "chapter";
         sections.push({
           section_type: type,
           section_title: sectionLabel(s),
           position: position++,
-          content: blocks.map((b) => b.content).join("\n\n"),
+          content: text,
         });
       }
     }
@@ -1328,54 +832,23 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     });
 
     if (res.ok) {
-      setSendToBookSuccess(true);
+      setSendToPublishSuccess(true);
       await loadBookVersions();
-      setTimeout(() => setSendToBookSuccess(false), 3000);
+      setTimeout(() => setSendToPublishSuccess(false), 3000);
     }
-
-    setSendingToBook(false);
+    setSendingToPublish(false);
   }
 
   function handleConfirmRemoveChapter(chapter: string) {
-    const remaining = chapters.filter((c) => c !== chapter);
+    const remaining = chapters.filter((c) => c.name !== chapter);
     setChapters(remaining);
-    setBrainstormChats((prev) => { const n = { ...prev }; delete n[chapter]; return n; });
-    setActiveChatIds((prev) => { const n = { ...prev }; delete n[chapter]; return n; });
-    setCompilationItems((prev) => prev.filter((item) => item.chapter !== chapter));
-    setDraftBlocks((prev) => { const n = { ...prev }; delete n[chapter]; return n; });
-    setActiveSection((prev) => (prev === chapter ? (remaining[0] ?? "prologue") : prev));
+    setAiMessages((prev) => { const n = { ...prev }; delete n[chapter]; return n; });
+    setComposeTexts((prev) => { const n = { ...prev }; delete n[chapter]; return n; });
+    setActiveSection((prev) => (prev === chapter ? (remaining[0]?.name ?? "prologue") : prev));
     setConfirmRemoveChapter(null);
   }
 
   const [isChaptersOpen, setIsChaptersOpen] = useState(true);
-
-  // Edit project modal state
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  function openEditModal() {
-    setEditName(projectName);
-    setEditType(projectType);
-    setShowEditModal(true);
-  }
-
-  async function handleSaveEdit() {
-    if (!editName.trim()) return;
-    setSaving(true);
-    const res = await fetch("/api/projects", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: projectId, name: editName.trim(), type: editType }),
-    });
-    if (res.ok) {
-      setProjectName(editName.trim());
-      setProjectType(editType);
-      setShowEditModal(false);
-    }
-    setSaving(false);
-  }
 
   // Render App mode for App projects
   if (projectType === "App") {
@@ -1387,9 +860,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {/* Project header bar */}
       <div
         className="flex shrink-0 items-center gap-4 mobile-px-4"
-        style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
+        style={{ height: 56, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
       >
-        {/* Hamburger menu — opens main sidebar */}
+        {/* Hamburger menu */}
         <button
           className="flex items-center justify-center"
           onClick={openMainSidebar}
@@ -1401,7 +874,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </svg>
         </button>
         <span className="text-[18px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-          {projectName || bookInfo.title || "Untitled Project"}
+          {bookInfo.title || projectName || "Untitled Project"}
         </span>
         {bookInfo.genre && (
           <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>
@@ -1421,18 +894,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         >
           {projectType}
         </span>
-        <button
-          onClick={openEditModal}
-          className="text-[12px] font-medium transition-colors"
-          style={{ color: "var(--text-muted)" }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
-          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-        >
-          Edit
-        </button>
-        {/* Spacer */}
         <div style={{ flex: 1 }} />
-        {/* Exit link */}
         <Link
           href="/"
           className="text-[13px] font-medium transition-colors"
@@ -1442,24 +904,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         >
           Exit
         </Link>
-      </div>
-
-      {/* Stage navigation */}
-      <div className="flex shrink-0 gap-1 border-b border-[var(--border-default)] px-8 pb-3 mobile-px-4" style={{ overflowX: "auto" }}>
-        {STAGES.map((stage) => (
-          <button
-            key={stage}
-            onClick={() => setActiveStage(stage)}
-            className={[
-              "rounded-t px-3 pb-3.5 pt-3 text-[13px] transition-colors",
-              activeStage === stage
-                ? "border-b-2 border-[var(--accent-blue)] font-medium text-[var(--text-primary)]"
-                : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]",
-            ].join(" ")}
-          >
-            {stage}
-          </button>
-        ))}
       </div>
 
       {/* Body: sidebar + content */}
@@ -1472,12 +916,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             onClick={() => setMobileSidebarOpen(false)}
           />
         )}
-        {/* Left sidebar — editing nav for writing stages, reader nav for Manuscript/Book */}
-        {activeStage !== "Manuscript" && activeStage !== "Book" ? (
+
+        {/* Left sidebar */}
+        {activeStage !== "Publish" && (
         <aside
-          className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`}
-          key="edit-sidebar"
-          style={{ background: "var(--surface-1)", zIndex: 41, position: undefined }}
+          className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`}
+          style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}
         >
           <nav className="flex flex-col gap-1 text-[13px]">
             {/* Book Info */}
@@ -1502,7 +946,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               Prologue
             </button>
 
-            {/* Chapters — collapsible group */}
+            {/* Chapters — collapsible group with nested sections */}
             <div className="mt-1">
               <div className="flex w-full items-center justify-between px-2 py-1">
                 <button
@@ -1523,36 +967,102 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                    <line x1="6" y1="1" x2="6" y2="11" />
-                    <line x1="1" y1="6" x2="11" y2="6" />
+                    <line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" />
                   </svg>
                 </button>
               </div>
               {isChaptersOpen && (
                 <div className="mt-0.5 flex flex-col gap-0.5 pl-2">
-                  {chapters.map((ch) => (
-                    <div key={ch} className="group flex items-center">
-                      <button
-                        onClick={() => setActiveSection(ch)}
-                        className={[
-                          "flex-1 rounded-l px-2 py-1.5 text-left text-[13px] transition-colors",
-                          activeSection === ch ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
-                        ].join(" ")}
-                      >
-                        {ch}
-                      </button>
-                      <button
-                        onClick={() => setConfirmRemoveChapter(ch)}
-                        title={`Remove ${ch}`}
-                        className="pr-1 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all"
-                      >
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                          <line x1="1" y1="1" x2="9" y2="9" />
-                          <line x1="9" y1="1" x2="1" y2="9" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
+                  {chapters.map((ch) => {
+                    const isExpanded = expandedChapters[ch.name] ?? false;
+                    return (
+                      <div key={ch.name}>
+                        <div className="group flex items-center">
+                          {/* Expand/collapse toggle for sections */}
+                          <button
+                            onClick={() => toggleChapterExpanded(ch.name)}
+                            className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                            style={{ width: 14, height: 14 }}
+                          >
+                            {ch.sections.length > 0 && (
+                              <svg
+                                width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+                                className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}
+                              >
+                                <polyline points="3,1 7,5 3,9" />
+                              </svg>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setActiveSection(ch.name)}
+                            className={[
+                              "flex-1 rounded-l px-1 py-1.5 text-left transition-colors min-w-0",
+                              activeSection === ch.name ? "bg-[rgba(255,255,255,0.06)]" : "hover:text-[var(--text-secondary)]",
+                            ].join(" ")}
+                          >
+                            <div className="flex items-baseline gap-1.5 min-w-0" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <span className="text-[13px] shrink-0" style={{ color: activeSection === ch.name ? "var(--text-primary)" : "var(--text-tertiary)" }}>
+                                {ch.name}
+                              </span>
+                              {ch.title && (
+                                <span className="text-[11px] min-w-0" style={{ color: activeSection === ch.name ? "var(--text-secondary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {ch.title}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                          {/* Add section button */}
+                          <button
+                            onClick={() => {
+                              handleAddSection(ch.name);
+                              setExpandedChapters((prev) => ({ ...prev, [ch.name]: true }));
+                            }}
+                            title="Add section"
+                            className="pr-0.5 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <line x1="6" y1="2" x2="6" y2="10" /><line x1="2" y1="6" x2="10" y2="6" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setConfirmRemoveChapter(ch.name)}
+                            title={`Remove ${ch.name}`}
+                            className="pr-1 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all"
+                          >
+                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                              <line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" />
+                            </svg>
+                          </button>
+                        </div>
+                        {/* Nested sections */}
+                        {isExpanded && ch.sections.length > 0 && (
+                          <div className="ml-4 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                            {ch.sections.map((sec) => (
+                              <button
+                                key={sec.id}
+                                onClick={() => setActiveSection(`${ch.name}::${sec.name}`)}
+                                className={[
+                                  "w-full rounded px-2 py-1 text-left transition-colors min-w-0",
+                                  activeSection === `${ch.name}::${sec.name}` ? "bg-[rgba(255,255,255,0.06)]" : "",
+                                ].join(" ")}
+                              >
+                                <div className="flex items-baseline gap-1.5 min-w-0" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  <span className="text-[12px] shrink-0" style={{ color: activeSection === `${ch.name}::${sec.name}` ? "var(--text-primary)" : "var(--text-faint)" }}>
+                                    {sec.name}
+                                  </span>
+                                  {sec.title && (
+                                    <span className="text-[10px] min-w-0" style={{ color: activeSection === `${ch.name}::${sec.name}` ? "var(--text-tertiary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {sec.title}
+                                    </span>
+                                  )}
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1569,134 +1079,121 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </button>
           </nav>
         </aside>
-        ) : activeStage === "Manuscript" ? (
-        <aside className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ background: "var(--surface-1)", zIndex: 41 }}>
-          {/* Reader navigation */}
-          <nav className="flex flex-col gap-0.5 text-[13px]">
-            {(["prologue", ...chapters, "epilogue"])
-              .filter((s) => (draftBlocks[s] ?? []).length > 0)
-              .map((s) => (
-                <button
-                  key={s}
-                  onClick={() =>
-                    document.getElementById(`manuscript-section-${s}`)?.scrollIntoView({ behavior: "smooth" })
-                  }
-                  className="w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
-                >
-                  {sectionLabel(s)}
-                </button>
-              ))}
-            {(["prologue", ...chapters, "epilogue"]).every(
-              (s) => (draftBlocks[s] ?? []).length === 0
-            ) && (
-              <p className="px-2 text-xs text-[var(--text-faint)]">No sections yet.</p>
-            )}
-          </nav>
-        </aside>
-        ) : null}
+        )}
 
         {/* Main content */}
-        <div className="flex-1 min-w-0 min-h-0 overflow-hidden">
-          {activeSection === "book_info" ? (
+        <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
+          {/* Stage navigation */}
+          <div className="flex shrink-0 gap-1 px-8 mobile-px-4" style={{ overflowX: "auto", paddingTop: 20, paddingBottom: 20 }}>
+            {STAGES.map((stage) => (
+              <button
+                key={stage}
+                onClick={() => setActiveStage(stage)}
+                className={[
+                  "px-3 py-1.5 text-[13px] rounded transition-colors",
+                  activeStage === stage
+                    ? "font-medium text-[var(--text-primary)]"
+                    : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]",
+                ].join(" ")}
+                style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}
+              >
+                {stage}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 min-h-0 overflow-hidden">
+          {activeSection === "book_info" && activeStage === "Compose" ? (
             <BookInfoPanel bookInfo={bookInfo} onChange={handleBookInfoChange} />
-          ) : activeStage === "Brainstorming" ? (
-            <BrainstormingPanel
+          ) : activeStage === "Compose" ? (
+            <ComposePage
               chapter={activeSection}
+              composeText={composeTexts[activeSection] ?? ""}
+              onComposeChange={(text) => handleComposeChange(activeSection, text)}
+              aiMessages={aiMessages[activeSection] ?? []}
+              onUpdateAiMessage={(updated) => handleUpdateAiMessage(activeSection, updated)}
+              onAddAiMessage={(msg) => handleAddAiMessage(activeSection, msg)}
               projectId={projectId}
-              bookTitle={projectName || bookInfo.title || "this book"}
-              messages={(brainstormChats[activeSection] ?? []).find((c) => c.id === activeChatIds[activeSection])?.messages ?? []}
-              activeChatId={activeChatIds[activeSection] ?? null}
-              compilationItems={compilationItems}
-              onAddMessage={(chatId, message) => handleAddBrainstormMessage(activeSection, chatId, message)}
-              onSendToCompilation={handleSendToCompilation}
-            />
-          ) : activeStage === "Compilation" ? (
-            <CompilationPanel
-              chapter={activeSection}
-              items={compilationItems}
-              draftBlocks={draftBlocks}
-              onAdd={handleInsertIntoDraft}
-              onToggleFavorite={handleToggleFavorite}
-            />
-          ) : activeStage === "Draft" ? (
-            <DraftPanel
-              chapter={activeSection}
-              draftBlocks={draftBlocks}
-              compilationItems={compilationItems}
-              onRemove={handleRemoveFromDraft}
-              onInsert={handleInsertIntoDraft}
-              onEditBlock={handleEditBlock}
-              onReorder={handleReorderBlock}
-              onMergeDown={handleMergeBlock}
-              onAiAssist={handleAiAssistBlock}
-              onUndo={handleUndoBlock}
+              bookTitle={bookInfo.title || projectName || "this book"}
+              chapterTitle={(() => {
+                if (activeSection.includes("::")) {
+                  const [chName, secName] = activeSection.split("::");
+                  const ch = chapters.find((c) => c.name === chName);
+                  return ch?.sections.find((s) => s.name === secName)?.title ?? "";
+                }
+                return chapters.find((c) => c.name === activeSection)?.title ?? "";
+              })()}
+              onChapterTitleChange={(title) => {
+                if (activeSection.includes("::")) {
+                  const [chName, secName] = activeSection.split("::");
+                  const ch = chapters.find((c) => c.name === chName);
+                  const sec = ch?.sections.find((s) => s.name === secName);
+                  if (sec) handleRenameSection(chName, sec.id, title);
+                } else {
+                  handleRenameChapter(activeSection, title);
+                }
+              }}
             />
           ) : activeStage === "Manuscript" ? (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
-              <div className="mx-auto max-w-3xl">
+              <div className="mx-auto" style={{ maxWidth: 900 }}>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Manuscript</h2>
                   <div className="flex items-center gap-3">
-                    {sendToBookSuccess && (
+                    {sendToPublishSuccess && (
                       <span className="text-[13px] text-green-400">Snapshot saved!</span>
                     )}
                     <button
-                      onClick={handleSendToBook}
-                      disabled={sendingToBook}
-                      className="text-white font-semibold text-xs transition-colors disabled:opacity-40"
-                      style={{ background: "linear-gradient(180deg, #5a9af5, #4a88e0)", height: 30, padding: "0 12px", borderRadius: 6, fontSize: 12 }}
+                      onClick={handleSendToPublish}
+                      disabled={sendingToPublish}
+                      className="text-[13px] font-medium transition-all disabled:opacity-40"
+                      style={{
+                        height: 36,
+                        padding: "0 20px",
+                        borderRadius: 20,
+                        border: "none",
+                        background: "linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7, #ec4899)",
+                        color: "#fff",
+                        cursor: sendingToPublish ? "not-allowed" : "pointer",
+                      }}
                     >
-                      {sendingToBook ? "Saving..." : "Send to Book"}
+                      {sendingToPublish ? "Saving..." : "Send to Publish"}
                     </button>
                   </div>
                 </div>
-                {(["prologue", ...chapters, "epilogue"])
-                  .filter((s) => (draftBlocks[s] ?? []).length > 0)
+                {(["prologue", ...chapters.map((c) => c.name), "epilogue"])
+                  .filter((s) => hasContent(composeTexts[s] ?? ""))
                   .map((s) => (
                       <div key={s} id={`manuscript-section-${s}`} className="mb-6" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                        {/* Card header */}
                         <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                           <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
                             {sectionLabel(s)}
                           </span>
                         </div>
                         <div style={{ padding: "16px 20px" }}>
-                          <div className="space-y-6">
-                            {(draftBlocks[s] ?? []).map((block) => {
-                              const paragraphs = block.content
-                                .split(/\n\s*\n/)
-                                .map((p) => p.trim())
-                                .filter(Boolean);
-                              return (
-                                <div key={block.id} className="space-y-4">
-                                  {paragraphs.map((para, i) => (
-                                    <p key={i} className="text-[var(--text-secondary)] leading-7">{para}</p>
-                                  ))}
-                                </div>
-                              );
-                            })}
-                          </div>
+                          <div
+                            className="prose-rendered"
+                            dangerouslySetInnerHTML={{ __html: composeTexts[s] ?? "" }}
+                          />
                         </div>
                       </div>
                   ))
                 }
-                {(["prologue", ...chapters, "epilogue"]).every((s) => (draftBlocks[s] ?? []).length === 0) && (
+                {(["prologue", ...chapters.map((c) => c.name), "epilogue"]).every((s) => !hasContent(composeTexts[s] ?? "")) && (
                   <p className="text-[13px] text-[var(--text-faint)]">
-                    Your manuscript will appear here once you add content in the Draft stage.
+                    Your manuscript will appear here once you add content in Compose.
                   </p>
                 )}
               </div>
             </div>
-          ) : activeStage === "Book" ? (
+          ) : activeStage === "Publish" ? (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Book Versions</h2>
+                  <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Publish</h2>
                   <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Snapshots of your manuscript</p>
                 </div>
               </div>
               <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                {/* Card header */}
                 <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>
                     All Versions
@@ -1705,7 +1202,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 {bookVersions.length === 0 ? (
                   <div style={{ padding: "32px 14px" }}>
                     <p className="text-[13px] text-[var(--text-faint)]">
-                      No versions yet. Use &ldquo;Send to Book&rdquo; from the Manuscript stage to create a snapshot.
+                      No versions yet. Use &ldquo;Send to Publish&rdquo; from the Manuscript tab to create a snapshot.
                     </p>
                   </div>
                 ) : (
@@ -1740,8 +1237,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               title="Final Edit"
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                               </svg>
                             </button>
                           </td>
@@ -1752,9 +1248,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                               title="Print PDF"
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M6 9V2h12v7" />
-                                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                                <rect x="6" y="14" width="12" height="8" />
+                                <path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" />
                               </svg>
                             </button>
                           </td>
@@ -1763,11 +1257,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                           </td>
                           <td className="py-2.5 pr-6 text-[var(--text-tertiary)]">
                             {new Date(v.created_at).toLocaleString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                              hour: "numeric",
-                              minute: "2-digit",
+                              month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
                             })}
                           </td>
                           <td className="py-2.5 pr-6 text-[var(--text-tertiary)] capitalize">
@@ -1786,88 +1276,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </div>
           ) : (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
-              <p className="text-[13px] text-[var(--text-faint)]">
-                Select a stage above.
-              </p>
+              <p className="text-[13px] text-[var(--text-faint)]">Select a tab above.</p>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Edit project modal */}
-      {showEditModal && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
-          onClick={() => setShowEditModal(false)}
-        >
-          <div
-            className="w-full"
-            style={{ maxWidth: 420, margin: "0 16px", background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 12, padding: "20px 24px" }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="mb-5 text-[15px] font-semibold" style={{ color: "var(--text-primary)" }}>Edit Project</h2>
-
-            <div className="flex gap-6 mb-4" style={{ alignItems: "center" }}>
-              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 80, letterSpacing: "0.06em", color: "var(--text-muted)" }}>Name</label>
-              <input
-                autoFocus
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveEdit()}
-                className="flex-1 text-[13px]"
-                style={{ padding: "7px 10px", background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-primary)", outline: "none", transition: "border-color 0.15s" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "rgba(90,154,245,0.35)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
-              />
-            </div>
-
-            <div className="flex gap-6 mb-6" style={{ alignItems: "center" }}>
-              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 80, letterSpacing: "0.06em", color: "var(--text-muted)" }}>Type</label>
-              <select
-                value={editType}
-                onChange={(e) => setEditType(e.target.value)}
-                className="flex-1 text-[13px]"
-                style={{
-                  appearance: "none",
-                  padding: "7px 28px 7px 10px",
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid var(--border-default)",
-                  borderRadius: 6,
-                  color: "var(--text-primary)",
-                  outline: "none",
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='rgba(255,255,255,0.3)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 10px center",
-                }}
-              >
-                {(["Book", "App", "Business", "Music"] as const).map((t) => (
-                  <option key={t} value={t} style={{ background: "var(--surface-2)" }}>{t}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-xs font-medium"
-                style={{ height: 28, padding: "0 10px", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-default)", borderRadius: 6, color: "var(--text-secondary)", transition: "all 0.12s" }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                disabled={!editName.trim() || saving}
-                className="text-xs font-semibold text-white whitespace-nowrap"
-                style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6, opacity: !editName.trim() || saving ? 0.35 : 1, cursor: !editName.trim() || saving ? "not-allowed" : "pointer" }}
-              >
-                {saving ? "Saving..." : "Save"}
-              </button>
-            </div>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Confirm remove chapter dialog */}
       {confirmRemoveChapter && (
@@ -1875,7 +1289,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Remove {confirmRemoveChapter}?</h2>
             <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
-              All data created in this chapter — brainstorms, compiled ideas, and draft content — will be permanently deleted.
+              All content and AI conversations for this chapter will be permanently deleted.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
