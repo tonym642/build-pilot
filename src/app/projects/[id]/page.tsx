@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import AppMode from "./app-mode";
+import { useMainSidebar } from "@/components/layout/sidebar-context";
 
 
 const STAGES = ["Brainstorming", "Compilation", "Draft", "Manuscript", "Book"] as const;
@@ -99,7 +100,7 @@ function BookInfoPanel({
   return (
     <div className="overflow-y-auto h-full">
       <div className="px-8 py-8 mobile-px-4" style={{ maxWidth: 720 }}>
-        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Book Info</h2>
+        <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Book Info</h2>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Project metadata — not included in the manuscript.</p>
         <div className="mt-7 flex flex-col gap-5">
           {fields.map(({ key, label, multiline, placeholder }) => (
@@ -285,13 +286,13 @@ function BrainstormingPanel({
               <div key={msg.id}>
                 {msg.role === "user" ? (
                   <div className="flex justify-end">
-                    <p className="max-w-[60%] rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-sm text-[var(--text-secondary)] whitespace-pre-line">
+                    <p className="max-w-[60%] rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">
                       {msg.text}
                     </p>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
+                    <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
                       {msg.text}
                     </p>
                     <AiActions
@@ -335,7 +336,7 @@ function BrainstormingPanel({
             placeholder="Add an idea, ask a question, or give direction…"
             rows={1}
             style={{ minHeight: "1.5rem", maxHeight: "12.5rem" }}
-            className="flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-sm text-[var(--text-primary)] placeholder-[var(--text-faint)] outline-none leading-relaxed"
+            className="flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)] outline-none leading-relaxed"
           />
 
           {/* Right: mic */}
@@ -452,7 +453,7 @@ function CompilationPanel({
         </div>
         <div className="h-full overflow-y-auto px-4 py-3" style={{ maxHeight: "calc(100% - 34px)" }}>
           {filteredItems.length === 0 ? (
-            <p className="mt-2 text-sm text-[var(--text-faint)]">
+            <p className="mt-2 text-[13px] text-[var(--text-faint)]">
               {activeFilter === "favorites"
                 ? "No favorites yet. Click the star on any card to save it here."
                 : "No saved ideas yet. Send Brainstorming responses here to start building your compilation."}
@@ -466,7 +467,7 @@ function CompilationPanel({
                     key={item.id}
                     className="rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-5 py-4"
                   >
-                    <p className="text-sm leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
+                    <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
                       {item.content}
                     </p>
                     <div className="mt-3 flex items-center justify-between">
@@ -576,7 +577,7 @@ function DraftPanel({
             {/* Modal header */}
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-semibold tracking-tight">Insert from Compilation</h3>
+                <h3 className="text-[13px] font-semibold tracking-tight">Insert from Compilation</h3>
                 <p className="mt-0.5 text-xs text-[var(--text-muted)]">{chapter}</p>
               </div>
               <button
@@ -593,7 +594,7 @@ function DraftPanel({
 
             {/* Modal content */}
             {chapterCompilationItems.length === 0 ? (
-              <p className="text-sm text-[var(--text-faint)]">No Compilation items for {chapter} yet.</p>
+              <p className="text-[13px] text-[var(--text-faint)]">No Compilation items for {chapter} yet.</p>
             ) : (
               <div className="flex max-h-96 flex-col gap-1 overflow-y-auto">
                 {chapterCompilationItems.map((item) => {
@@ -604,7 +605,7 @@ function DraftPanel({
                       className="flex items-start gap-4 rounded-[10px] border border-[var(--border-default)] bg-[rgba(255,255,255,0.02)] px-4 py-3"
                     >
                       <p className={[
-                        "flex-1 text-sm leading-relaxed",
+                        "flex-1 text-[13px] leading-relaxed",
                         alreadyIn ? "text-[var(--text-faint)]" : "text-[var(--text-secondary)]",
                       ].join(" ")}>
                         {item.content}
@@ -644,7 +645,7 @@ function DraftPanel({
         </div>
         <div className="h-full overflow-y-auto px-4 py-3" style={{ maxHeight: "calc(100% - 34px)" }}>
           {blocks.length === 0 ? (
-            <p className="mt-2 text-sm text-[var(--text-faint)]">
+            <p className="mt-2 text-[13px] text-[var(--text-faint)]">
               No draft content yet. Move ideas from Compilation to start assembling your draft.
             </p>
           ) : (
@@ -671,7 +672,7 @@ function DraftPanel({
                         }}
                         rows={1}
                         style={{ overflow: "hidden" }}
-                        className="w-full resize-none bg-[rgba(255,255,255,0.04)] rounded-lg px-3 py-2.5 text-sm leading-relaxed text-[var(--text-secondary)] placeholder-[var(--text-faint)] outline-none border border-[var(--border-default)] focus:border-[rgba(90,154,245,0.35)]"
+                        className="w-full resize-none bg-[rgba(255,255,255,0.04)] rounded-lg px-3 py-2.5 text-[13px] leading-relaxed text-[var(--text-secondary)] placeholder-[var(--text-faint)] outline-none border border-[var(--border-default)] focus:border-[rgba(90,154,245,0.35)]"
                       />
                       <div className="mt-2.5 flex items-center justify-end gap-4">
                         <button
@@ -693,7 +694,7 @@ function DraftPanel({
                     </>
                   ) : (
                     <>
-                      <p className="text-sm leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
+                      <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">
                         {block.content}
                       </p>
                       <div className="mt-3 flex items-center justify-between">
@@ -827,6 +828,7 @@ function DraftPanel({
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: projectId } = use(params);
   const router = useRouter();
+  const { openMainSidebar } = useMainSidebar();
   const searchParams = useSearchParams();
   const [projectName, setProjectName] = useState<string>("");
   const [projectType, setProjectType] = useState<string>("Book");
@@ -1387,27 +1389,25 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         className="flex shrink-0 items-center gap-4 mobile-px-4"
         style={{ height: 48, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
       >
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 text-[12px] font-medium transition-colors"
-          style={{ color: "var(--text-tertiary)", padding: "4px 10px", borderRadius: 6, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-default)" }}
-        >
-          &larr; Back
-        </Link>
-        {/* Mobile sidebar toggle */}
+        {/* Hamburger menu — opens main sidebar */}
         <button
-          className="desktop-hidden flex items-center justify-center"
-          onClick={() => setMobileSidebarOpen((v) => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)" }}
-          aria-label="Toggle sidebar"
+          className="flex items-center justify-center"
+          onClick={openMainSidebar}
+          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+          aria-label="Open navigation"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <path d="M2 4h12M2 8h12M2 12h12" />
           </svg>
         </button>
-        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+        <span className="text-[18px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {projectName || bookInfo.title || "Untitled Project"}
         </span>
+        {bookInfo.genre && (
+          <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>
+            {bookInfo.genre}
+          </span>
+        )}
         <span
           className="mobile-hidden"
           style={{
@@ -1430,6 +1430,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         >
           Edit
         </button>
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+        {/* Exit link */}
+        <Link
+          href="/"
+          className="text-[13px] font-medium transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+        >
+          Exit
+        </Link>
       </div>
 
       {/* Stage navigation */}
@@ -1439,7 +1451,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             key={stage}
             onClick={() => setActiveStage(stage)}
             className={[
-              "rounded-t px-3 pb-3.5 pt-3 text-sm transition-colors",
+              "rounded-t px-3 pb-3.5 pt-3 text-[13px] transition-colors",
               activeStage === stage
                 ? "border-b-2 border-[var(--accent-blue)] font-medium text-[var(--text-primary)]"
                 : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]",
@@ -1467,12 +1479,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           key="edit-sidebar"
           style={{ background: "var(--surface-1)", zIndex: 41, position: undefined }}
         >
-          <nav className="flex flex-col gap-1 text-sm">
+          <nav className="flex flex-col gap-1 text-[13px]">
             {/* Book Info */}
             <button
               onClick={() => setActiveSection("book_info")}
               className={[
-                "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors",
                 activeSection === "book_info" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
               ].join(" ")}
             >
@@ -1483,7 +1495,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <button
               onClick={() => setActiveSection("prologue")}
               className={[
-                "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors",
                 activeSection === "prologue" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
               ].join(" ")}
             >
@@ -1523,7 +1535,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <button
                         onClick={() => setActiveSection(ch)}
                         className={[
-                          "flex-1 rounded-l px-2 py-1.5 text-left text-sm transition-colors",
+                          "flex-1 rounded-l px-2 py-1.5 text-left text-[13px] transition-colors",
                           activeSection === ch ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
                         ].join(" ")}
                       >
@@ -1549,7 +1561,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <button
               onClick={() => setActiveSection("epilogue")}
               className={[
-                "mt-1 w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "mt-1 w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors",
                 activeSection === "epilogue" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
               ].join(" ")}
             >
@@ -1560,7 +1572,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         ) : activeStage === "Manuscript" ? (
         <aside className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ background: "var(--surface-1)", zIndex: 41 }}>
           {/* Reader navigation */}
-          <nav className="flex flex-col gap-0.5 text-sm">
+          <nav className="flex flex-col gap-0.5 text-[13px]">
             {(["prologue", ...chapters, "epilogue"])
               .filter((s) => (draftBlocks[s] ?? []).length > 0)
               .map((s) => (
@@ -1569,7 +1581,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   onClick={() =>
                     document.getElementById(`manuscript-section-${s}`)?.scrollIntoView({ behavior: "smooth" })
                   }
-                  className="w-full rounded px-2 py-1.5 text-left text-sm text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
+                  className="w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] transition-colors hover:text-[var(--text-secondary)]"
                 >
                   {sectionLabel(s)}
                 </button>
@@ -1623,10 +1635,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="mx-auto max-w-3xl">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Manuscript</h2>
+                  <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Manuscript</h2>
                   <div className="flex items-center gap-3">
                     {sendToBookSuccess && (
-                      <span className="text-sm text-green-400">Snapshot saved!</span>
+                      <span className="text-[13px] text-green-400">Snapshot saved!</span>
                     )}
                     <button
                       onClick={handleSendToBook}
@@ -1669,7 +1681,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   ))
                 }
                 {(["prologue", ...chapters, "epilogue"]).every((s) => (draftBlocks[s] ?? []).length === 0) && (
-                  <p className="text-sm text-[var(--text-faint)]">
+                  <p className="text-[13px] text-[var(--text-faint)]">
                     Your manuscript will appear here once you add content in the Draft stage.
                   </p>
                 )}
@@ -1679,7 +1691,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Book Versions</h2>
+                  <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Book Versions</h2>
                   <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Snapshots of your manuscript</p>
                 </div>
               </div>
@@ -1692,12 +1704,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
                 {bookVersions.length === 0 ? (
                   <div style={{ padding: "32px 14px" }}>
-                    <p className="text-sm text-[var(--text-faint)]">
+                    <p className="text-[13px] text-[var(--text-faint)]">
                       No versions yet. Use &ldquo;Send to Book&rdquo; from the Manuscript stage to create a snapshot.
                     </p>
                   </div>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full text-[13px]">
                     <thead>
                       <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
                         <th className="pb-2 pl-3.5 pr-1 pt-2.5 font-medium w-10" style={{ fontSize: 11 }}></th>
@@ -1774,7 +1786,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             </div>
           ) : (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
-              <p className="text-sm text-[var(--text-faint)]">
+              <p className="text-[13px] text-[var(--text-faint)]">
                 Select a stage above.
               </p>
             </div>
@@ -1862,19 +1874,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Remove {confirmRemoveChapter}?</h2>
-            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
               All data created in this chapter — brainstorms, compiled ideas, and draft content — will be permanently deleted.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmRemoveChapter(null)}
-                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleConfirmRemoveChapter(confirmRemoveChapter)}
-                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500"
               >
                 Remove
               </button>

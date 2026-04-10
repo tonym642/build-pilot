@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useMainSidebar } from "@/components/layout/sidebar-context";
 
 /* ─── types ──────────────────────────────────────────────────────── */
 
@@ -121,7 +122,7 @@ function AppInfoPanel({
   return (
     <div className="overflow-y-auto h-full">
       <div className="px-8 py-8 mobile-px-4" style={{ maxWidth: 720 }}>
-        <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>App Info</h2>
+        <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>App Info</h2>
         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Core details about your app — keep it sharp.</p>
         <div className="mt-7 flex flex-col gap-5">
           {fields.map(({ key, label, multiline, placeholder }) => (
@@ -168,7 +169,7 @@ function ConceptPanel({
       {/* Left: brainstorm */}
       <div className="flex flex-1 flex-col border-r border-[var(--border-default)] min-h-0">
         <div className="shrink-0 px-6 pt-6 pb-3">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
+          <h3 className="text-[13px] font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
           <p className="mt-0.5 text-xs text-[var(--text-faint)]">Brain dump — nothing is final here.</p>
         </div>
         <div className="flex-1 min-h-0 px-6 pb-6">
@@ -176,14 +177,14 @@ function ConceptPanel({
             value={concept.brainstorm}
             onChange={(e) => onChange({ ...concept, brainstorm: e.target.value })}
             placeholder="Write freely about your app concept, user flows, ideas, comparisons..."
-            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
       {/* Right: committed */}
       <div className="flex flex-1 flex-col min-h-0">
         <div className="shrink-0 px-6 pt-6 pb-3">
-          <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Locked-In Concept</h3>
+          <h3 className="text-[13px] font-medium text-[var(--text-tertiary)]">Locked-In Concept</h3>
           <p className="mt-0.5 text-xs text-[var(--text-faint)]">The version you&rsquo;re building toward.</p>
         </div>
         <div className="flex-1 min-h-0 px-6 pb-6">
@@ -191,7 +192,7 @@ function ConceptPanel({
             value={concept.committed}
             onChange={(e) => onChange({ ...concept, committed: e.target.value })}
             placeholder="Write your committed app concept here..."
-            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
@@ -250,7 +251,7 @@ function ScreensListPanel({
             <p className="text-[var(--text-muted)]">No screens yet.</p>
             <button
               onClick={onAdd}
-              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
+              className="mt-3 text-[13px] text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Create your first screen
             </button>
@@ -273,12 +274,12 @@ function ScreensListPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-[13px] text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpen(screen.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
+                    className="flex-1 px-4 py-3 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {screen.name}
                   </button>
@@ -316,19 +317,19 @@ function ScreensListPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete screen?</h2>
-            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
               This screen and all its sections will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { onDelete(confirmDeleteId); setConfirmDeleteId(null); }}
-                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500"
               >
                 Delete
               </button>
@@ -399,7 +400,7 @@ function ScreenDetailPanel({
             <p className="text-[var(--text-muted)]">No sections yet.</p>
             <button
               onClick={onAddSection}
-              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
+              className="mt-3 text-[13px] text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Add the first section
             </button>
@@ -422,12 +423,12 @@ function ScreenDetailPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-[13px] text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpenSection(section.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
+                    className="flex-1 px-4 py-3 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {section.name}
                   </button>
@@ -465,19 +466,19 @@ function ScreenDetailPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete section?</h2>
-            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
               This section and its content will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { onDeleteSection(confirmDeleteId); setConfirmDeleteId(null); }}
-                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500"
               >
                 Delete
               </button>
@@ -518,7 +519,7 @@ function SectionDetailPanel({
         {/* Left: brainstorm */}
         <div className="flex flex-1 flex-col border-r border-[var(--border-default)] min-h-0">
           <div className="shrink-0 px-6 pt-3 pb-3">
-            <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
+            <h3 className="text-[13px] font-medium text-[var(--text-tertiary)]">Working Ideas</h3>
             <p className="mt-0.5 text-xs text-[var(--text-faint)]">Explore ideas for this section freely.</p>
           </div>
           <div className="flex-1 min-h-0 px-6 pb-6">
@@ -526,14 +527,14 @@ function SectionDetailPanel({
               value={section.brainstorm}
               onChange={(e) => onChange({ ...section, brainstorm: e.target.value })}
               placeholder="Brainstorm layout, components, behavior, copy..."
-              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
             />
           </div>
         </div>
         {/* Right: committed */}
         <div className="flex flex-1 flex-col min-h-0">
           <div className="shrink-0 px-6 pt-3 pb-3">
-            <h3 className="text-sm font-medium text-[var(--text-tertiary)]">Committed Design</h3>
+            <h3 className="text-[13px] font-medium text-[var(--text-tertiary)]">Committed Design</h3>
             <p className="mt-0.5 text-xs text-[var(--text-faint)]">The finalized spec for this section.</p>
           </div>
           <div className="flex-1 min-h-0 px-6 pb-6">
@@ -541,7 +542,7 @@ function SectionDetailPanel({
               value={section.committed}
               onChange={(e) => onChange({ ...section, committed: e.target.value })}
               placeholder="Write the locked-in design for this section..."
-              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+              className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
             />
           </div>
         </div>
@@ -605,7 +606,7 @@ function FeaturesPanel({
             value={activeFeature.description}
             onChange={(e) => onUpdateDescription(activeFeature.id, e.target.value)}
             placeholder="Describe this feature — what it does, how it works, edge cases, dependencies..."
-            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+            className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
           />
         </div>
       </div>
@@ -633,7 +634,7 @@ function FeaturesPanel({
             <p className="text-[var(--text-muted)]">No features yet.</p>
             <button
               onClick={onAdd}
-              className="mt-3 text-sm text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
+              className="mt-3 text-[13px] text-[var(--text-tertiary)] underline hover:text-[var(--text-secondary)]"
             >
               Add your first feature
             </button>
@@ -656,12 +657,12 @@ function FeaturesPanel({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") { setEditingId(null); setEditValue(""); }
                     }}
-                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
+                    className="flex-1 rounded-md bg-transparent px-4 py-3 text-[13px] text-[var(--text-primary)] focus:outline-none"
                   />
                 ) : (
                   <button
                     onClick={() => onOpen(feature.id)}
-                    className="flex-1 px-4 py-3 text-left text-sm font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
+                    className="flex-1 px-4 py-3 text-left text-[13px] font-medium text-[var(--text-primary)] transition-colors hover:text-[var(--text-primary)]"
                   >
                     {feature.name}
                   </button>
@@ -699,19 +700,19 @@ function FeaturesPanel({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete feature?</h2>
-            <p className="mt-2 text-sm text-[var(--text-tertiary)]">
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
               This feature will be permanently removed.
             </p>
             <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={() => setConfirmDeleteId(null)}
-                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-sm text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
+                className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
               >
                 Cancel
               </button>
               <button
                 onClick={() => { onDelete(confirmDeleteId); setConfirmDeleteId(null); }}
-                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500"
               >
                 Delete
               </button>
@@ -741,7 +742,7 @@ function BuildPlanPanel({
           value={buildPlan.content}
           onChange={(e) => onChange({ content: e.target.value })}
           placeholder="Outline your build plan — phases, milestones, priorities, dependencies..."
-          className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-sm text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+          className="h-full w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
         />
       </div>
     </div>
@@ -757,6 +758,7 @@ export default function AppMode({
   projectId: string;
   projectName: string;
 }) {
+  const { openMainSidebar } = useMainSidebar();
   const [appData, setAppData] = useState<AppData>(EMPTY_APP_DATA);
   const [view, setView] = useState<ViewState>({ page: "App Info" });
   const [displayName, setDisplayName] = useState(projectName);
@@ -976,15 +978,15 @@ export default function AppMode({
     return (
       <aside className={`w-52 shrink-0 border-r border-[var(--border-default)] px-4 py-5 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ background: "var(--surface-1)", zIndex: 41 }}>
         <div className="mb-4 px-2">
-          <p className="text-sm font-semibold tracking-tight text-[var(--text-primary)]">{screen.name}</p>
+          <p className="text-[13px] font-semibold tracking-tight text-[var(--text-primary)]">{screen.name}</p>
           <p className="mt-0.5 text-xs text-[var(--text-muted)]">{screenSections.length} section{screenSections.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="mb-4 border-t border-[var(--border-default)]" />
-        <nav className="flex flex-col gap-0.5 text-sm">
+        <nav className="flex flex-col gap-0.5 text-[13px]">
           <button
             onClick={() => setView({ page: "Screens", screenId: view.screenId })}
             className={[
-              "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+              "w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors",
               !("sectionId" in view) || !view.sectionId
                 ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
                 : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
@@ -997,7 +999,7 @@ export default function AppMode({
               key={section.id}
               onClick={() => setView({ page: "Screens", screenId: view.screenId!, sectionId: section.id })}
               className={[
-                "w-full rounded px-2 py-1.5 text-left text-sm transition-colors",
+                "w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors",
                 "sectionId" in view && view.sectionId === section.id
                   ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
                   : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
@@ -1113,25 +1115,18 @@ export default function AppMode({
         className="flex shrink-0 items-center gap-4 mobile-px-4"
         style={{ height: 48, padding: "0 24px", background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)" }}
       >
-        <Link
-          href="/"
-          className="flex items-center gap-1.5 text-[12px] font-medium transition-colors"
-          style={{ color: "var(--text-tertiary)", padding: "4px 10px", borderRadius: 6, background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-default)" }}
-        >
-          &larr; Back
-        </Link>
-        {/* Mobile sidebar toggle */}
+        {/* Hamburger menu — opens main sidebar */}
         <button
-          className="desktop-hidden flex items-center justify-center"
-          onClick={() => setMobileSidebarOpen((v: boolean) => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)" }}
-          aria-label="Toggle sidebar"
+          className="flex items-center justify-center"
+          onClick={openMainSidebar}
+          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+          aria-label="Open navigation"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <path d="M2 4h12M2 8h12M2 12h12" />
           </svg>
         </button>
-        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+        <span className="text-[18px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {displayName}
         </span>
         <span
@@ -1156,6 +1151,18 @@ export default function AppMode({
         >
           Edit
         </button>
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+        {/* Exit link */}
+        <Link
+          href="/"
+          className="text-[13px] font-medium transition-colors"
+          style={{ color: "var(--text-muted)" }}
+          onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")}
+          onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+        >
+          Exit
+        </Link>
       </div>
 
       {/* Page navigation tabs */}
@@ -1165,7 +1172,7 @@ export default function AppMode({
             key={page}
             onClick={() => navigateToPage(page)}
             className={[
-              "rounded-t px-3 pb-3.5 pt-3 text-sm transition-colors",
+              "rounded-t px-3 pb-3.5 pt-3 text-[13px] transition-colors",
               currentPage === page
                 ? "border-b-2 border-[var(--accent-blue)] font-medium text-[var(--text-primary)]"
                 : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]",
