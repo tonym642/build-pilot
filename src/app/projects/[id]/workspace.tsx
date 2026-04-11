@@ -307,28 +307,39 @@ function NotesView({
   }
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0">
+    <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
       <div className="flex flex-col min-h-0" style={{ width: aiOpen ? `${divX}%` : "100%" }}>
-        <div className="flex-1 min-h-0 px-6 pb-6">
+        <div className="flex-1 min-h-0 px-6 pb-6 mobile-px-4">
           <RichTextEditor content={note.content} onChange={onContentChange} label={note.title} placeholder="Write freely — this is your thinking space…" />
         </div>
       </div>
+      {/* Mobile AI toggle */}
+      <button
+        className="desktop-hidden shrink-0 flex items-center justify-center gap-2 py-2 transition-colors"
+        onClick={() => setAiOpen((v) => !v)}
+        style={{ borderTop: "1px solid var(--border-subtle)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{aiOpen ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={aiOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
+      </button>
+      {/* Divider — desktop only */}
       {aiOpen && (
-        <div className="shrink-0 flex items-center justify-center" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
+        <div className="shrink-0 flex items-center justify-center mobile-hidden" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
           <button onClick={() => setAiOpen(false)} title="Close AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="3,1 7,5 3,9" /></svg>
           </button>
         </div>
       )}
       {!aiOpen && (
-        <div className="shrink-0 flex items-center" style={{ position: "relative", width: 16 }}>
+        <div className="shrink-0 flex items-center mobile-hidden" style={{ position: "relative", width: 16 }}>
           <button onClick={() => setAiOpen(true)} title="Open AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, right: -11, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="7,1 3,5 7,9" /></svg>
           </button>
         </div>
       )}
       {aiOpen && (
-        <div className="min-h-0 flex flex-col pr-6 pb-6" style={{ width: `${100 - divX}%` }}>
+        <div className="min-h-0 flex flex-col pr-6 pb-6 mobile-px-4" style={{ width: `${100 - divX}%`, minHeight: 300 }}>
           <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
             <WsAiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} onAddMessage={onAddAiMessage} projectId={projectId} bookTitle={bookTitle} context={`Workspace Note: ${note.title}`} />
           </div>
@@ -441,7 +452,7 @@ function LibraryView({
   function goPrev() { if (activeChunkIdx > 0) setActiveChunkIdx(activeChunkIdx - 1); }
 
   return (
-    <div className="flex h-full min-h-0 gap-4 p-6">
+    <div className="flex h-full min-h-0 gap-4 p-6 mobile-col mobile-p-3 mobile-gap-2">
       {/* Left: preview */}
       <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
         {/* Header */}
@@ -499,7 +510,7 @@ function LibraryView({
       </div>
 
       {/* Right: suggestions */}
-      <div className="shrink-0 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ width: "42%" }}>
+      <div className="shrink-0 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] mobile-w-full" style={{ width: "42%", minHeight: 300 }}>
         {/* Header: title + view toggle + analyze + filters — all in one row */}
         <div className="shrink-0 flex items-center gap-1 px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--border-default)", overflowX: "auto" }}>
           <span className="text-[12px] font-medium shrink-0 mr-1" style={{ color: "var(--text-faint)" }}>Suggestions</span>
@@ -640,7 +651,7 @@ function CompiledDraftView({
   const [titleDraft, setTitleDraft] = useState(draft.title);
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0 p-6 gap-4">
+    <div ref={containerRef} className="flex h-full min-h-0 p-6 gap-4 mobile-col mobile-p-3 mobile-gap-2">
       {/* Left: compiled content */}
       <div className="flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ width: aiOpen ? `${divX}%` : "100%" }}>
         {/* Header label */}
@@ -731,16 +742,26 @@ function CompiledDraftView({
         </div>
       </div>
 
-      {/* Divider */}
+      {/* Mobile AI toggle */}
+      <button
+        className="desktop-hidden shrink-0 flex items-center justify-center gap-2 py-2 transition-colors"
+        onClick={() => setAiOpen((v) => !v)}
+        style={{ borderTop: "1px solid var(--border-subtle)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{aiOpen ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={aiOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
+      </button>
+      {/* Divider — desktop only */}
       {aiOpen && (
-        <div className="shrink-0 flex items-center justify-center" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
+        <div className="shrink-0 flex items-center justify-center mobile-hidden" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
           <button onClick={() => setAiOpen(false)} title="Close AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="3,1 7,5 3,9" /></svg>
           </button>
         </div>
       )}
       {!aiOpen && (
-        <div className="shrink-0 flex items-center" style={{ position: "relative", width: 16 }}>
+        <div className="shrink-0 flex items-center mobile-hidden" style={{ position: "relative", width: 16 }}>
           <button onClick={() => setAiOpen(true)} title="Open AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, right: -11, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="7,1 3,5 7,9" /></svg>
           </button>
@@ -749,7 +770,7 @@ function CompiledDraftView({
 
       {/* Right: AI assistant */}
       {aiOpen && (
-        <div className="min-h-0 flex flex-col" style={{ width: `${100 - divX}%` }}>
+        <div className="min-h-0 flex flex-col mobile-w-full" style={{ width: `${100 - divX}%`, minHeight: 300 }}>
           <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
             <WsAiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} onAddMessage={onAddAiMessage} projectId={projectId} bookTitle={bookTitle} context={`Compiled Draft: ${draft.title}`} />
           </div>
@@ -833,7 +854,7 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Add to Library</h2>
         <div className="mt-4 flex gap-1 mb-4">
           <button onClick={() => setTab("upload")} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${tab === "upload" ? "bg-[var(--overlay-active)] font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:text-[var(--text-tertiary)]"}`}>Upload File</button>
@@ -900,7 +921,7 @@ function CreateDraftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Create Compiled Draft</h2>
         <p className="mt-2 text-[13px]" style={{ color: "var(--text-muted)" }}>AI will analyze your selected files together, group related ideas by topic, merge duplicates, and produce an organized draft.</p>
 
@@ -1312,7 +1333,7 @@ export function useWorkspace({
       {showCreateDraftModal && <CreateDraftModal sourceItems={data.libraryItems.filter((li) => selectedLibIds.has(li.id))} onClose={() => setShowCreateDraftModal(false)} onCreate={handleCreateDraft} />}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setConfirmDeleteId(null)}>
-          <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Delete {confirmDeleteId.type === "note" ? "note" : "library item"}?</h2>
             <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">This will permanently remove {confirmDeleteId.type === "note" ? "this note and its content" : "this item and its suggestions"}.</p>
             <div className="mt-5 flex justify-end gap-2">

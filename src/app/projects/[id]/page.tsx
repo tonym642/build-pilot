@@ -142,10 +142,20 @@ const EMPTY_BOOK_INFO: BookInfo = {
 function BookInfoPanel({
   bookInfo,
   onChange,
+  aiMessages,
+  onUpdateAiMessage,
+  onAddAiMessage,
+  projectId,
 }: {
   bookInfo: BookInfo;
   onChange: (updated: BookInfo) => void;
+  aiMessages: AiMessage[];
+  onUpdateAiMessage: (updated: AiMessage) => void;
+  onAddAiMessage: (message: AiMessage) => void;
+  projectId: string;
 }) {
+  const [mobileAiOpen, setMobileAiOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const fields: { key: keyof BookInfo; label: string; multiline?: boolean; placeholder?: string }[] = [
     { key: "title", label: "Title", placeholder: "e.g. Life Basics 101" },
     { key: "subtitle", label: "Subtitle", placeholder: "e.g. A guide to living intentionally" },
@@ -156,14 +166,13 @@ function BookInfoPanel({
     { key: "one_line_hook", label: "One-Line Hook", multiline: false, placeholder: "A single sentence that captures the essence of the book" },
     { key: "audience", label: "Audience", multiline: true, placeholder: "Who is this book for?" },
     { key: "promise", label: "Promise", multiline: true, placeholder: "What will readers gain or feel by the end?" },
-    { key: "summary", label: "Summary", multiline: true, placeholder: "A short overview of what the book is about" },
   ];
 
   return (
-    <div className="flex h-full min-h-0 gap-4 p-6 mobile-stack mobile-px-4">
+    <div className="flex h-full min-h-0 gap-4 p-6 mobile-stack mobile-p-3">
       {/* Left card: fields */}
       <div className="flex-1 overflow-y-auto rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
-        <div className="px-6 py-6" style={{ maxWidth: 720 }}>
+        <div className="px-6 py-6 mobile-px-4" style={{ maxWidth: 720 }}>
           <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Book Info</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Project metadata — not included in the manuscript.</p>
           <div className="mt-7 flex flex-col gap-5">
@@ -261,8 +270,8 @@ function BookInfoPanel({
       </div>
 
       {/* Right card: synopsis */}
-      <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
-        <div className="px-6 pt-6 pb-3">
+      <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 250 }}>
+        <div className="px-6 pt-6 pb-3 mobile-px-4">
           <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Synopsis</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>A detailed overview of your book&rsquo;s narrative, structure, and key themes.</p>
         </div>
@@ -275,6 +284,49 @@ function BookInfoPanel({
           />
         </div>
       </div>
+
+      {/* Mobile AI Assistant */}
+      <button
+        className="desktop-hidden shrink-0 flex items-center justify-center gap-2 py-2 transition-colors"
+        onClick={() => setMobileAiOpen((v) => !v)}
+        style={{ borderTop: "1px solid var(--border-subtle)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{mobileAiOpen ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={mobileAiOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
+      </button>
+      {mobileAiOpen && (
+        <div className="desktop-hidden shrink-0 mobile-px-4 pb-4" style={{ minHeight: 300 }}>
+          <div className="h-full rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="Book Info" onAddMessage={onAddAiMessage} />
+          </div>
+        </div>
+      )}
+
+      {/* Desktop AI drawer trigger */}
+      <button
+        className="mobile-hidden fixed flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)] shadow-lg"
+        onClick={() => setDrawerOpen((v) => !v)}
+        style={{ bottom: 24, right: 24, width: 44, height: 44, zIndex: 49 }}
+        title={drawerOpen ? "Close AI Assistant" : "Open AI Assistant"}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: drawerOpen ? "var(--text-primary)" : "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+      </button>
+
+      {/* Desktop AI drawer */}
+      {drawerOpen && (
+        <div className="mobile-hidden fixed flex flex-col border-l border-[var(--border-default)] bg-[var(--surface-1)] shadow-2xl" style={{ top: 56, right: 0, bottom: 0, width: 380, zIndex: 48, transition: "transform 0.2s" }}>
+          <div className="shrink-0 flex items-center px-4 pt-3 pb-2" style={{ height: 46, borderBottom: "1px solid var(--border-default)" }}>
+            <span className="text-[12px] font-medium" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
+            <button onClick={() => setDrawerOpen(false)} className="ml-auto flex items-center justify-center rounded transition-colors hover:bg-[var(--overlay-hover)]" style={{ width: 24, height: 24, color: "var(--text-faint)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            </button>
+          </div>
+          <div className="flex-1 min-h-0">
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="Book Info" onAddMessage={onAddAiMessage} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -454,29 +506,40 @@ function ComposePage({
   }
 
   return (
-    <div ref={containerRef} className="flex h-full min-h-0">
+    <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
       <div className="flex flex-col min-h-0" style={{ width: aiPanelOpen ? `${dividerX}%` : "100%" }}>
-        <div className="flex-1 min-h-0 px-6 pb-6">
+        <div className="flex-1 min-h-0 px-6 pb-6 mobile-px-4">
           <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" />
         </div>
       </div>
+      {/* Mobile AI toggle */}
+      <button
+        className="desktop-hidden shrink-0 flex items-center justify-center gap-2 py-2 transition-colors"
+        onClick={() => setAiPanelOpen((v) => !v)}
+        style={{ borderTop: "1px solid var(--border-subtle)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{aiPanelOpen ? "Hide AI Assistant" : "Show AI Assistant"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={aiPanelOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
+      </button>
+      {/* Divider — desktop only */}
       {aiPanelOpen && (
-        <div className="shrink-0 flex items-center justify-center" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
+        <div className="shrink-0 flex items-center justify-center mobile-hidden" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
           <button onClick={() => setAiPanelOpen(false)} title="Close AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="3,1 7,5 3,9" /></svg>
           </button>
         </div>
       )}
       {!aiPanelOpen && (
-        <div className="shrink-0 flex items-center" style={{ position: "relative", width: 16 }}>
+        <div className="shrink-0 flex items-center mobile-hidden" style={{ position: "relative", width: 16 }}>
           <button onClick={() => setAiPanelOpen(true)} title="Open AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, right: -11, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="7,1 3,5 7,9" /></svg>
           </button>
         </div>
       )}
       {aiPanelOpen && (
-        <div className="min-h-0 flex flex-col pr-6 pb-6" style={{ width: `${100 - dividerX}%` }}>
-          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
+        <div className="min-h-0 flex flex-col pr-6 pb-6 mobile-px-4" style={{ width: `${100 - dividerX}%` }}>
+          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
             <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={sectionTitle} onAddMessage={onAddAiMessage} />
           </div>
         </div>
@@ -707,7 +770,7 @@ function AdaptLanguageModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Adapt to Another Language</h2>
         <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
           This creates a new localized edition in another language. It preserves meaning and tone, but wording may change naturally for fluency and cultural fit.
@@ -1118,23 +1181,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         className="flex shrink-0 items-center gap-4 mobile-px-4"
         style={{ height: 56, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
       >
-        <button className="flex items-center justify-center" onClick={openMainSidebar} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Open navigation">
+        <button className="flex items-center justify-center" onClick={() => setMobileSidebarOpen((v) => !v)} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Toggle sidebar">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 4h12M2 8h12M2 12h12" /></svg>
         </button>
         <span className="text-[20px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {bookInfo.title || projectName || "Untitled Project"}
         </span>
-        {/* Mobile sidebar toggle */}
-        <button
-          className="desktop-hidden flex items-center justify-center"
-          onClick={() => setMobileSidebarOpen((v) => !v)}
-          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
-          aria-label="Toggle sidebar"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" />
-          </svg>
-        </button>
         {bookInfo.genre && <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>{bookInfo.genre}</span>}
         <span className="mobile-hidden" style={{ fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 3, background: projectType === "Book" ? "rgba(74,222,128,0.18)" : projectType === "Music" ? "rgba(90,154,245,0.18)" : "rgba(251,191,36,0.18)", color: projectType === "Book" ? "#4ade80" : projectType === "Music" ? "#5a9af5" : "#fbbf24" }}>{projectType}</span>
         <div style={{ flex: 1 }} />
@@ -1335,7 +1387,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden">
           {/* ─── COMPOSE ─── */}
           {activeStage === "Compose" && selection.type === "book_info" ? (
-            <BookInfoPanel bookInfo={bookInfo} onChange={handleBookInfoChange} />
+            <BookInfoPanel
+              bookInfo={bookInfo}
+              onChange={handleBookInfoChange}
+              aiMessages={aiMessages["book_info"] ?? []}
+              onUpdateAiMessage={(updated) => handleUpdateAiMessage("book_info", updated)}
+              onAddAiMessage={(msg) => handleAddAiMessage("book_info", msg)}
+              projectId={projectId}
+            />
           ) : activeStage === "Compose" && isWritableSection ? (
             <ComposePage
               sectionTitle={currentSectionTitle}
@@ -1432,7 +1491,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 return (
                   <>
                     {/* Header with language selector */}
-                    <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center justify-between mb-6 mobile-stack mobile-gap-2">
                       <div>
                         <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Publish</h2>
                         <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Manage editions and snapshots of your manuscript</p>
@@ -1457,7 +1516,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     </div>
 
                     {/* Single edition card for selected language */}
-                    <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
+                    <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "auto" }}>
                       <div className="flex items-center gap-3" style={{ padding: "12px 14px 10px", borderBottom: "1px solid var(--border-subtle)" }}>
                         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{activeLang}</span>
                         <span style={{ fontSize: 10, fontWeight: 500, padding: "1px 8px", borderRadius: 20, background: isPrimary ? "rgba(74,222,128,0.12)" : versions.length > 0 ? "rgba(90,154,245,0.12)" : "var(--overlay-hover)", color: editionColor }}>{editionLabel}</span>
@@ -1552,7 +1611,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       {/* Confirm remove chapter dialog */}
       {confirmRemoveChapter && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
+          <div className="w-full max-w-sm mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl">
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Remove chapter?</h2>
             <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">All sections, content, and AI conversations for this chapter will be permanently deleted.</p>
             <div className="mt-5 flex justify-end gap-2">

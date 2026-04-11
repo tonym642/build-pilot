@@ -84,19 +84,39 @@ html {
   .mobile-overflow-x-auto {
     overflow-x: auto !important;
   }
-}
-@media (max-width: 768px) {
   .mobile-stack {
     flex-direction: column !important;
+    gap: 6px !important;
+    align-items: flex-start !important;
+  }
+  .mobile-stack > * {
+    width: 100% !important;
+    flex-shrink: 0 !important;
   }
   .mobile-stack > label {
-    width: auto !important;
+    width: 100% !important;
+    padding-top: 0 !important;
+    text-align: left !important;
   }
   .mobile-w-full {
     width: 100% !important;
   }
   .mobile-text-15 {
     font-size: 15px !important;
+  }
+  .mobile-p-3 {
+    padding: 12px !important;
+  }
+  .mobile-gap-2 {
+    gap: 8px !important;
+  }
+  .mobile-col {
+    flex-direction: column !important;
+    overflow-y: auto !important;
+  }
+  .mobile-col > * {
+    width: 100% !important;
+    flex-shrink: 0 !important;
   }
 }
 @media (min-width: 769px) {
