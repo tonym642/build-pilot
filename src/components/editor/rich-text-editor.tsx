@@ -192,21 +192,9 @@ export function RichTextEditor({
         className="shrink-0 flex items-center border-b border-[var(--border-default)] px-3"
         style={{ height: 40 }}
       >
-        {label && (
-          <span className="text-[12px] font-medium pl-1 shrink-0" style={{ color: "var(--text-faint)" }}>
-            {label}
-          </span>
-        )}
-        {onTitleChange !== undefined && (
-          <input
-            type="text"
-            value={titleValue ?? ""}
-            onChange={(e) => onTitleChange(e.target.value)}
-            placeholder="Add title…"
-            className="ml-2 flex-1 min-w-0 text-[13px] font-medium bg-transparent border-none outline-none text-[var(--text-secondary)] placeholder:text-[var(--text-faint)]"
-          />
-        )}
-        {!onTitleChange && <div style={{ flex: 1 }} />}
+        <span className="text-[12px] font-medium pl-1 shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>
+          Composer
+        </span>
         <div className="flex items-center gap-0.5">
         <ToolbarButton
           active={editor.isActive("bold")}
@@ -250,11 +238,14 @@ export function RichTextEditor({
         </div>
       </div>
 
-      {/* Editor content */}
+      {/* Section title + Editor content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <EditorContent
-          editor={editor}
-        />
+        {label && (
+          <div className="px-5 pt-4 pb-1">
+            <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{label}</span>
+          </div>
+        )}
+        <EditorContent editor={editor} />
       </div>
     </div>
   );
