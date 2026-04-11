@@ -2,13 +2,14 @@
 
 import { useState, useRef, useEffect, useCallback, use } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import AppMode from "./app-mode";
+import { useWorkspace, EMPTY_WORKSPACE, type WorkspaceData } from "./workspace";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { ThemeToggle } from "@/components/layout/theme-context";
 
-
+const TOP_TABS = ["Book", "Workspace"] as const;
+type TopTab = (typeof TOP_TABS)[number];
 const STAGES = ["Compose", "Manuscript", "Publish"] as const;
 
 /** Check if HTML content has any visible text */
@@ -462,6 +463,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
+  const [topTab, setTopTab] = useState<TopTab>("Book");
+  const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(EMPTY_WORKSPACE);
+  const workspace = useWorkspace({
+    projectId,
+    bookTitle: bookInfo.title || projectName || "this book",
+    data: workspaceData,
+    chapters: chapters.map((ch) => ({ title: ch.title, sections: ch.sections.map((s) => ({ title: s.title })) })),
+    onChange: setWorkspaceData,
+  });
 
   useEffect(() => { setMobileSidebarOpen(false); }, [selection, activeStage]);
 
@@ -495,6 +505,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               });
               setChapters(migrated);
             }
+          }
+          if (data.book_info?.workspace) {
+            setWorkspaceData({ ...EMPTY_WORKSPACE, ...data.book_info.workspace });
           }
           setTimeout(() => { projectLoadedRef.current = true; }, 500);
         }
@@ -535,7 +548,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     if (updated.title.trim()) setProjectName(updated.title.trim());
     if (bookInfoTimerRef.current) clearTimeout(bookInfoTimerRef.current);
     bookInfoTimerRef.current = setTimeout(() => {
-      const patch: Record<string, unknown> = { id: projectId, book_info: { ...updated, chapters: chaptersRef.current } };
+      const patch: Record<string, unknown> = { id: projectId, book_info: { ...updated, chapters: chaptersRef.current, workspace: workspaceRef.current } };
       if (updated.title.trim()) patch.name = updated.title.trim();
       fetch("/api/projects", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) });
     }, 800);
@@ -545,12 +558,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const chaptersTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bookInfoRef = useRef(bookInfo);
   useEffect(() => { bookInfoRef.current = bookInfo; }, [bookInfo]);
+  const workspaceRef = useRef(workspaceData);
+  useEffect(() => { workspaceRef.current = workspaceData; }, [workspaceData]);
 
   useEffect(() => {
     if (!projectLoadedRef.current) return;
     if (chaptersTimerRef.current) clearTimeout(chaptersTimerRef.current);
     chaptersTimerRef.current = setTimeout(() => {
-      const payload = { ...bookInfoRef.current, chapters };
+      const payload = { ...bookInfoRef.current, chapters, workspace: workspaceRef.current };
       fetch("/api/projects", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: projectId, book_info: payload }) });
     }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -572,6 +587,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }, 800);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composeTexts]);
+
+  // Auto-save workspace data (debounced)
+  const workspaceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspaceLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (!workspaceLoadedRef.current) { workspaceLoadedRef.current = true; return; }
+    if (!projectLoadedRef.current) return;
+    if (workspaceTimerRef.current) clearTimeout(workspaceTimerRef.current);
+    workspaceTimerRef.current = setTimeout(() => {
+      const payload = { ...bookInfoRef.current, chapters: chaptersRef.current, workspace: workspaceData };
+      fetch("/api/projects", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: projectId, book_info: payload }) });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspaceData]);
 
   // Load compose texts from drafts
   useEffect(() => {
@@ -742,23 +772,33 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <span className="mobile-hidden" style={{ fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 3, background: projectType === "Book" ? "rgba(74,222,128,0.18)" : projectType === "Music" ? "rgba(90,154,245,0.18)" : "rgba(251,191,36,0.18)", color: projectType === "Book" ? "#4ade80" : projectType === "Music" ? "#5a9af5" : "#fbbf24" }}>{projectType}</span>
         <div style={{ flex: 1 }} />
         <ThemeToggle />
-        <Link href="/" className="text-[13px] font-medium transition-colors" style={{ color: "var(--text-muted)" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>Exit</Link>
+        <button onClick={() => router.push("/")} className="text-[13px] font-medium transition-colors" style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>Exit</button>
       </div>
 
       {/* Body: sidebar + content */}
       <div className="flex flex-1 min-h-0 overflow-hidden" style={{ position: "relative" }}>
         {mobileSidebarOpen && <div className="desktop-hidden" style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} onClick={() => setMobileSidebarOpen(false)} />}
 
-        {/* Left sidebar — Compose mode */}
-        {activeStage === "Compose" && (
-        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
-          <nav className="flex flex-col gap-0.5 text-[14px]">
+        {/* Left sidebar */}
+        {(topTab === "Workspace" || topTab === "Book") && (
+        <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
+          {/* Book | Workspace tabs */}
+          <div className="flex items-center gap-1 px-4 pt-4 pb-3 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+            {TOP_TABS.map((tab) => (
+              <button key={tab} onClick={() => setTopTab(tab)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${topTab === tab ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={topTab === tab ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{tab}</button>
+            ))}
+          </div>
+
+          {/* Book sidebar content */}
+          {topTab === "Book" && activeStage === "Compose" && (
+          <nav className="flex flex-col gap-0.5 text-[14px] px-4 pt-5 pb-4">
             <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
             <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "prologue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
+            <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "epilogue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
 
             {/* Chapters */}
-            <div className="mt-2 mb-1 flex items-center justify-between px-2">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
+            <div className="mt-6 mb-1 flex items-center justify-between px-2">
+              <span className="text-[12px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
               <button onClick={handleAddChapter} title="Add chapter" className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" /></svg>
               </button>
@@ -828,16 +868,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               );
             })}
 
-            {/* Epilogue */}
-            <button onClick={() => setSelection({ type: "epilogue" })} className={`mt-1 w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "epilogue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
           </nav>
-        </aside>
-        )}
+          )}
 
-        {/* Left sidebar — Manuscript TOC */}
-        {activeStage === "Manuscript" && (
-        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
-          <nav className="flex flex-col gap-0.5 text-[13px]">
+          {/* Manuscript TOC */}
+          {topTab === "Book" && activeStage === "Manuscript" && (
+          <nav className="flex flex-col gap-0.5 text-[13px] px-4 pt-5 pb-4">
             <div className="px-2 pb-2 mb-1">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
             </div>
@@ -903,18 +939,26 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               </button>
             )}
           </nav>
+          )}
+
+          {/* Workspace sidebar content */}
+          {topTab === "Workspace" && workspace.sidebarContent}
         </aside>
         )}
 
         {/* Main content */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
-          {/* Stage navigation */}
-          <div className="flex shrink-0 gap-1 px-8 mobile-px-4" style={{ overflowX: "auto", paddingTop: 20, paddingBottom: 20 }}>
-            {STAGES.map((stage) => (
-              <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
-            ))}
-          </div>
-          <div className="flex-1 min-h-0 overflow-hidden">
+          {/* Book sub-navigation */}
+          {topTab === "Book" && (
+            <div className="flex shrink-0 gap-1 px-8 mobile-px-4" style={{ overflowX: "auto", paddingTop: 16, paddingBottom: 16 }}>
+              {STAGES.map((stage) => (
+                <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
+              ))}
+            </div>
+          )}
+          {/* ─── Workspace Tab ─── */}
+          {topTab === "Workspace" && workspace.mainContent}
+          {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden">
           {/* ─── COMPOSE ─── */}
           {activeStage === "Compose" && selection.type === "book_info" ? (
             <BookInfoPanel bookInfo={bookInfo} onChange={handleBookInfoChange} />
@@ -1043,7 +1087,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           ) : (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4"><p className="text-[13px] text-[var(--text-faint)]">Select a tab above.</p></div>
           )}
-          </div>
+          </div>}
         </div>
       </div>
 
