@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { chunkText, ensureChunks, countWords, type LibraryChunk, type AnalysisStatus } from "@/lib/chunking";
 
@@ -80,9 +80,12 @@ export type LibraryItem = {
 
 export type CompiledTopic = {
   title: string;
+  subtopic?: string;
   core_idea: string;
   best_insight: string;
   merged_version: string;
+  duplicate_count?: number;
+  source_chunk_ids?: string[];
 };
 
 export type CompiledDraft = {
@@ -347,44 +350,54 @@ function LibraryView({
   const [analyzeProgress, setAnalyzeProgress] = useState("");
   const [activeChunkIdx, setActiveChunkIdx] = useState(0);
   const [suggView, setSuggView] = useState<"chunk" | "all">("chunk");
+  const [suggLimit, setSuggLimit] = useState(20);
+  const analyzingRef = useRef(false); // debounce guard
 
-  // Ensure chunks exist (backward compat for items imported before chunking)
-  const chunks = ensureChunks(item.content, item.chunks);
+  // Memoize chunks (backward compat + avoid re-chunking on every render)
+  const chunks = useMemo(() => ensureChunks(item.content, item.chunks), [item.content, item.chunks]);
   const activeChunk = chunks[activeChunkIdx] ?? chunks[0];
   const hasMultipleChunks = chunks.length > 1;
-  const totalWords = chunks.reduce((s, c) => s + c.word_count, 0);
+  const totalWords = useMemo(() => item.word_count ?? chunks.reduce((s, c) => s + c.word_count, 0), [item.word_count, chunks]);
 
-  // Track which chunks have been analyzed
-  const analyzedChunkIds = new Set(item.suggestions.map((s) => s.chunk_id).filter(Boolean));
+  // Memoize analyzed chunk IDs set
+  const analyzedChunkIds = useMemo(() => new Set(item.suggestions.map((s) => s.chunk_id).filter(Boolean)), [item.suggestions]);
   const activeChunkAnalyzed = activeChunk ? analyzedChunkIds.has(activeChunk.chunk_id) : false;
+
+  // Reset suggestion limit when switching chunks or filters
+  useEffect(() => { setSuggLimit(20); }, [activeChunkIdx, suggView, activeFilter]);
 
   /** Analyze all chunks sequentially, 1-3 suggestions per chunk */
   async function handleAnalyzeAll() {
+    if (analyzingRef.current) return; // debounce
+    analyzingRef.current = true;
     setAnalyzing(true);
     let allNew: LibrarySuggestion[] = [];
     try {
       for (let i = 0; i < chunks.length; i++) {
         const c = chunks[i];
-        if (analyzedChunkIds.has(c.chunk_id)) continue; // skip already analyzed
+        if (analyzedChunkIds.has(c.chunk_id)) continue;
         setAnalyzeProgress(`Chunk ${i + 1} of ${chunks.length}`);
-        const res = await fetch("/api/workspace/analyze-library", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: c.chunk_text, chunk_id: c.chunk_id, bookTitle, chapters, project_id: projectId, max_suggestions: 3 }),
-        });
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.suggestions)) {
-          allNew = [...allNew, ...data.suggestions];
-        }
+        try {
+          const res = await fetch("/api/workspace/analyze-library", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: c.chunk_text, chunk_id: c.chunk_id, bookTitle, chapters, project_id: projectId, max_suggestions: 3 }),
+          });
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.suggestions)) {
+            allNew = [...allNew, ...data.suggestions];
+          }
+        } catch { /* skip failed chunk, continue */ }
       }
       onUpdateItem({ ...item, suggestions: [...item.suggestions, ...allNew], analysis_status: "analyzed" as AnalysisStatus });
     } catch { /* silent */ }
-    finally { setAnalyzing(false); setAnalyzeProgress(""); }
+    finally { setAnalyzing(false); setAnalyzeProgress(""); analyzingRef.current = false; }
   }
 
   /** Analyze only the active chunk */
   async function handleAnalyzeChunk() {
-    if (!activeChunk) return;
+    if (!activeChunk || analyzingRef.current) return;
+    analyzingRef.current = true;
     setAnalyzing(true);
     try {
       const res = await fetch("/api/workspace/analyze-library", {
@@ -397,89 +410,87 @@ function LibraryView({
         onUpdateItem({ ...item, suggestions: [...item.suggestions, ...data.suggestions], analysis_status: "analyzed" as AnalysisStatus });
       }
     } catch { /* silent */ }
-    finally { setAnalyzing(false); }
+    finally { setAnalyzing(false); analyzingRef.current = false; }
   }
 
-  function handleUpdateSugg(updated: LibrarySuggestion) {
+  const handleUpdateSugg = useCallback((updated: LibrarySuggestion) => {
     onUpdateItem({ ...item, suggestions: item.suggestions.map((s) => s.id === updated.id ? updated : s) });
-  }
+  }, [item, onUpdateItem]);
 
-  // Build a chunk_id → index+title lookup for labels
-  const chunkLookup = new Map(chunks.map((c, i) => [c.chunk_id, { idx: i + 1, title: c.chunk_title }]));
+  // Memoize chunk lookup for suggestion labels
+  const chunkLookup = useMemo(() => new Map(chunks.map((c, i) => [c.chunk_id, { idx: i + 1, title: c.chunk_title }])), [chunks]);
 
-  // Filter: first by chunk view mode, then by status filter
-  const viewFiltered = suggView === "chunk" && activeChunk
-    ? item.suggestions.filter((s) => s.chunk_id === activeChunk.chunk_id)
-    : item.suggestions;
-  const filtered = filterSuggestions(viewFiltered, activeFilter);
+  // Memoize filtered suggestions (client-side, no re-query)
+  const filtered = useMemo(() => {
+    const viewFiltered = suggView === "chunk" && activeChunk
+      ? item.suggestions.filter((s) => s.chunk_id === activeChunk.chunk_id)
+      : item.suggestions;
+    return filterSuggestions(viewFiltered, activeFilter);
+  }, [item.suggestions, suggView, activeChunk, activeFilter]);
+
+  // Paginate: only render up to suggLimit
+  const visibleSuggestions = filtered.slice(0, suggLimit);
+  const hasMoreSuggestions = filtered.length > suggLimit;
+
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll preview to top on chunk change
+  useEffect(() => { previewRef.current?.scrollTo({ top: 0 }); }, [activeChunkIdx]);
+
+  function goNext() { if (activeChunkIdx < chunks.length - 1) setActiveChunkIdx(activeChunkIdx + 1); }
+  function goPrev() { if (activeChunkIdx > 0) setActiveChunkIdx(activeChunkIdx - 1); }
 
   return (
     <div className="flex h-full min-h-0 gap-4 p-6">
       {/* Left: preview */}
       <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
+        {/* Header */}
         <div className="shrink-0 flex items-center px-5 pt-3 pb-2" style={{ height: 46, borderBottom: "1px solid var(--border-default)" }}>
           <span className="text-[12px] font-medium" style={{ color: "var(--text-faint)" }}>Library</span>
-          <span className="ml-auto text-[11px]" style={{ color: "var(--text-faint)" }}>{totalWords.toLocaleString()}w &middot; {chunks.length} chunk{chunks.length !== 1 ? "s" : ""}</span>
-        </div>
-        <div className="px-5 pt-4 pb-2 flex items-baseline gap-3">
-          <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{item.title}</h2>
-          <div className="flex items-center gap-2 text-[11px]" style={{ color: "var(--text-faint)" }}>
+          <div className="ml-auto flex items-center gap-2 text-[11px]" style={{ color: "var(--text-faint)" }}>
             <span>{item.source_type === "upload" ? (item.file_type ?? "File").toUpperCase() : "Pasted Text"}</span>
             <span>&middot;</span>
-            <span>Imported {new Date(item.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+            <span>{totalWords.toLocaleString()}w</span>
+            {hasMultipleChunks && <><span>&middot;</span><span>{chunks.length} chunks</span></>}
             <span>&middot;</span>
             <span style={{ color: item.analysis_status === "analyzed" ? "var(--accent-green)" : item.analysis_status === "chunked" ? "var(--accent-blue)" : "var(--text-faint)" }}>{item.analysis_status === "analyzed" ? "Analyzed" : item.analysis_status === "chunked" ? "Chunked" : item.analysis_status === "error" ? "Error" : "Not analyzed"}</span>
           </div>
         </div>
 
-        {/* Chunk navigation */}
-        {hasMultipleChunks && (
-          <div className="shrink-0 px-5 pt-2 pb-2 flex items-center gap-2" style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-            <select
-              value={activeChunkIdx}
-              onChange={(e) => setActiveChunkIdx(Number(e.target.value))}
-              className="rounded border border-[var(--border-default)] bg-[var(--surface-3)] px-2 py-1 text-[12px] text-[var(--text-secondary)] outline-none cursor-pointer"
-              style={{ maxWidth: 280 }}
-            >
-              {chunks.map((c, i) => (
-                <option key={c.chunk_id} value={i}>{c.chunk_title} ({c.word_count}w)</option>
-              ))}
-            </select>
-            <div className="ml-auto flex items-center gap-1">
-              <button
-                onClick={() => setActiveChunkIdx(Math.max(0, activeChunkIdx - 1))}
-                disabled={activeChunkIdx === 0}
-                className="shrink-0 flex items-center justify-center rounded transition-colors disabled:opacity-25"
-                style={{ width: 22, height: 22, color: "var(--text-faint)" }}
+        {/* Title + chunk selector */}
+        <div className="shrink-0 px-5 pt-4 pb-2">
+          <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>{item.title}</h2>
+          {hasMultipleChunks && (
+            <div className="mt-2 flex items-center gap-2">
+              <select
+                value={activeChunkIdx}
+                onChange={(e) => setActiveChunkIdx(Number(e.target.value))}
+                className="rounded border border-[var(--border-default)] bg-[var(--surface-3)] px-2 py-1 text-[12px] text-[var(--text-secondary)] outline-none cursor-pointer"
+                style={{ maxWidth: 260 }}
               >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="7,1 3,5 7,9" /></svg>
-              </button>
-              <button
-                onClick={() => setActiveChunkIdx(Math.min(chunks.length - 1, activeChunkIdx + 1))}
-                disabled={activeChunkIdx === chunks.length - 1}
-                className="shrink-0 flex items-center justify-center rounded transition-colors disabled:opacity-25"
-                style={{ width: 22, height: 22, color: "var(--text-faint)" }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="3,1 7,5 3,9" /></svg>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Chunk preview */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 pt-4">
-          {activeChunk && (
-            <>
-              {hasMultipleChunks && (
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-[11px] font-medium" style={{ color: "var(--text-muted)" }}>Chunk {activeChunkIdx + 1} of {chunks.length}</span>
-                  <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>{activeChunk.word_count} words</span>
-                </div>
-              )}
-              <div className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
-                {activeChunk.chunk_text}
+                {chunks.map((c, i) => (
+                  <option key={c.chunk_id} value={i}>{c.chunk_title} ({c.word_count}w)</option>
+                ))}
+              </select>
+              <div className="flex items-center gap-0.5">
+                <button onClick={goPrev} disabled={activeChunkIdx === 0} className="flex items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-[var(--overlay-hover)]" style={{ width: 20, height: 20, color: "var(--text-faint)" }}>
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="6,1 2,5 6,9" /></svg>
+                </button>
+                <button onClick={goNext} disabled={activeChunkIdx === chunks.length - 1} className="flex items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-[var(--overlay-hover)]" style={{ width: 20, height: 20, color: "var(--text-faint)" }}>
+                  <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><polyline points="4,1 8,5 4,9" /></svg>
+                </button>
               </div>
-            </>
+              <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>{activeChunkIdx + 1}/{chunks.length}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Content preview */}
+        <div ref={previewRef} className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 pt-3">
+          {activeChunk && (
+            <div className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+              {activeChunk.chunk_text}
+            </div>
           )}
           {!activeChunk && (
             <p className="text-[13px]" style={{ color: "var(--text-faint)" }}>No content available.</p>
@@ -489,42 +500,41 @@ function LibraryView({
 
       {/* Right: suggestions */}
       <div className="shrink-0 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ width: "42%" }}>
-        {/* Header: title + view toggle */}
-        <div className="shrink-0 flex items-center px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--border-default)" }}>
-          <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>Suggestions</span>
+        {/* Header: title + view toggle + analyze + filters — all in one row */}
+        <div className="shrink-0 flex items-center gap-1 px-4 pt-3 pb-2" style={{ borderBottom: "1px solid var(--border-default)", overflowX: "auto" }}>
+          <span className="text-[12px] font-medium shrink-0 mr-1" style={{ color: "var(--text-faint)" }}>Suggestions</span>
+          {/* View toggle */}
           {hasMultipleChunks && (
-            <div className="flex items-center gap-0.5 rounded" style={{ background: "var(--overlay-hover)", padding: "1px" }}>
-              <button onClick={() => setSuggView("chunk")} className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${suggView === "chunk" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Current Chunk</button>
-              <button onClick={() => setSuggView("all")} className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${suggView === "all" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>All Chunks</button>
-            </div>
+            <>
+              <div className="flex items-center gap-0.5 shrink-0 rounded" style={{ background: "var(--overlay-hover)", padding: "1px" }}>
+                <button onClick={() => setSuggView("chunk")} className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${suggView === "chunk" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Chunk</button>
+                <button onClick={() => setSuggView("all")} className={`rounded px-2 py-0.5 text-[10px] font-medium transition-colors ${suggView === "all" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>All</button>
+              </div>
+              <div className="shrink-0" style={{ width: 1, height: 14, background: "var(--border-default)" }} />
+            </>
           )}
-        </div>
-        {/* Control row: analyze pill + status filters */}
-        <div className="shrink-0 flex items-center gap-1 px-4 pt-1.5 pb-2" style={{ overflowX: "auto" }}>
           {/* Analyze pill */}
           <button
             onClick={() => { if (suggView === "chunk" && !activeChunkAnalyzed) handleAnalyzeChunk(); else handleAnalyzeAll(); }}
             disabled={analyzing}
-            className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors flex items-center gap-1 disabled:opacity-40 ${item.suggestions.length > 0 ? "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]" : "text-[var(--accent-purple)]"}`}
+            className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors flex items-center gap-1 disabled:opacity-40 ${item.suggestions.length > 0 ? "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]" : "text-[var(--accent-purple)]"}`}
             style={{ border: "1px solid var(--border-hover)", background: item.suggestions.length === 0 ? "rgba(139,124,245,0.08)" : "transparent" }}
           >
             {analyzing ? (
-              <><div className="h-2.5 w-2.5 animate-spin rounded-full border border-[var(--border-default)] border-t-[var(--accent-purple)]" /><span>{analyzeProgress || "Analyzing"}</span></>
+              <><div className="h-2.5 w-2.5 animate-spin rounded-full border border-[var(--border-default)] border-t-[var(--accent-purple)]" /><span>{analyzeProgress || "..."}</span></>
             ) : item.suggestions.length > 0 ? (
               <span>Reanalyze</span>
             ) : (
               <span>Analyze</span>
             )}
           </button>
-          {/* Chunk count meta */}
           {hasMultipleChunks && !analyzing && (
-            <span className="shrink-0 text-[10px] mr-1" style={{ color: "var(--text-faint)" }}>{analyzedChunkIds.size}/{chunks.length}</span>
+            <span className="shrink-0 text-[9px]" style={{ color: "var(--text-faint)" }}>{analyzedChunkIds.size}/{chunks.length}</span>
           )}
-          {/* Divider */}
           <div className="shrink-0" style={{ width: 1, height: 14, background: "var(--border-default)" }} />
           {/* Status filters */}
           {SUGG_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`shrink-0 rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
+            <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`shrink-0 rounded px-2 py-0.5 text-[10px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
           ))}
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
@@ -544,9 +554,9 @@ function LibraryView({
           {!analyzing && filtered.length === 0 && (suggView === "all" || activeChunkAnalyzed) && item.suggestions.length > 0 && (
             <p className="text-[12px] text-[var(--text-faint)] text-center py-8">{activeFilter === "all" ? "No suggestions." : `No ${activeFilter} suggestions.`}</p>
           )}
-          {/* Suggestion cards */}
+          {/* Suggestion cards (paginated) */}
           <div className="flex flex-col gap-4">
-            {filtered.map((s) => {
+            {visibleSuggestions.map((s) => {
               const cl = s.chunk_id ? chunkLookup.get(s.chunk_id) : null;
               return (
                 <div key={s.id} className="rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] p-4">
@@ -572,6 +582,11 @@ function LibraryView({
                 </div>
               );
             })}
+            {hasMoreSuggestions && (
+              <button onClick={() => setSuggLimit((v) => v + 20)} className="text-[12px] font-medium py-2 transition-colors" style={{ color: "var(--text-faint)" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}>
+                Show more ({filtered.length - suggLimit} remaining)
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -689,7 +704,13 @@ function CompiledDraftView({
           <div className="flex flex-col gap-4">
             {draft.topics.map((topic, i) => (
               <div key={i} className="rounded-md border border-[var(--border-subtle)] p-5" style={{ background: "var(--overlay-hover)" }}>
-                <h3 className="text-[14px] font-semibold mb-3" style={{ color: "var(--text-primary)" }}>{topic.title}</h3>
+                <div className="flex items-baseline gap-2 mb-1">
+                  <h3 className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{topic.title}</h3>
+                  {topic.subtopic && <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>{topic.subtopic}</span>}
+                </div>
+                {(topic.duplicate_count ?? 0) > 1 && (
+                  <p className="text-[10px] mb-3" style={{ color: "var(--text-faint)" }}>{topic.duplicate_count} similar passages merged</p>
+                )}
                 <div className="flex flex-col gap-3">
                   <div>
                     <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Core Idea</span>
@@ -750,6 +771,11 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  function buildItem(title: string, sourceType: "upload" | "paste", fileType: string | undefined, content: string): LibraryItem {
+    const ch = chunkText(content);
+    return { id: crypto.randomUUID(), title, source_type: sourceType, file_type: fileType, content, chunks: ch, word_count: ch.reduce((s, c) => s + c.word_count, 0), created_at: new Date().toISOString(), suggestions: [], analysis_status: "chunked" as AnalysisStatus };
+  }
+
   async function handleFile(file: File) {
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     setUploadError(null);
@@ -763,7 +789,7 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
         const res = await fetch("/api/workspace/parse-docx", { method: "POST", body: form });
         const data = await res.json();
         if (res.ok && data.text) {
-          onImport({ id: crypto.randomUUID(), title: file.name, source_type: "upload", file_type: ext, content: data.text, chunks: chunkText(data.text), created_at: new Date().toISOString(), suggestions: [], analysis_status: "chunked" as AnalysisStatus });
+          onImport(buildItem(file.name, "upload", ext, data.text));
         } else {
           setUploadError(data.error || "Could not extract readable text from this DOCX file.");
         }
@@ -775,7 +801,7 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
       const reader = new FileReader();
       reader.onload = () => {
         const content = typeof reader.result === "string" ? reader.result : "";
-        onImport({ id: crypto.randomUUID(), title: file.name, source_type: "upload", file_type: ext, content, chunks: chunkText(content), created_at: new Date().toISOString(), suggestions: [], analysis_status: "chunked" as AnalysisStatus });
+        onImport(buildItem(file.name, "upload", ext, content));
       };
       reader.readAsText(file);
     } else {
@@ -787,7 +813,7 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
           setUploadError("Could not extract readable text from this file. Try pasting the text instead.");
           return;
         }
-        onImport({ id: crypto.randomUUID(), title: file.name, source_type: "upload", file_type: ext, content, chunks: chunkText(content), created_at: new Date().toISOString(), suggestions: [], analysis_status: "chunked" as AnalysisStatus });
+        onImport(buildItem(file.name, "upload", ext, content));
       };
       reader.readAsText(file);
     }
@@ -802,16 +828,7 @@ function ImportModal({ onClose, onImport }: { onClose: () => void; onImport: (it
 
   function handlePasteSave() {
     if (!pasteContent.trim()) return;
-    onImport({
-      id: crypto.randomUUID(),
-      title: pasteTitle.trim() || "Untitled",
-      source_type: "paste",
-      content: pasteContent,
-      chunks: chunkText(pasteContent),
-      created_at: new Date().toISOString(),
-      suggestions: [],
-      analysis_status: "chunked" as AnalysisStatus,
-    });
+    onImport(buildItem(pasteTitle.trim() || "Untitled", "paste", undefined, pasteContent));
   }
 
   return (
