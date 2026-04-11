@@ -727,6 +727,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <span className="text-[20px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {bookInfo.title || projectName || "Untitled Project"}
         </span>
+        {/* Mobile sidebar toggle */}
+        <button
+          className="desktop-hidden flex items-center justify-center"
+          onClick={() => setMobileSidebarOpen((v) => !v)}
+          style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+          aria-label="Toggle sidebar"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z" />
+          </svg>
+        </button>
         {bookInfo.genre && <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>{bookInfo.genre}</span>}
         <span className="mobile-hidden" style={{ fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 3, background: projectType === "Book" ? "rgba(74,222,128,0.18)" : projectType === "Music" ? "rgba(90,154,245,0.18)" : "rgba(251,191,36,0.18)", color: projectType === "Book" ? "#4ade80" : projectType === "Music" ? "#5a9af5" : "#fbbf24" }}>{projectType}</span>
         <div style={{ flex: 1 }} />
@@ -740,7 +751,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
         {/* Left sidebar — Compose mode */}
         {activeStage === "Compose" && (
-        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
+        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
           <nav className="flex flex-col gap-0.5 text-[14px]">
             <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
             <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "prologue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
@@ -825,7 +836,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
         {/* Left sidebar — Manuscript TOC */}
         {activeStage === "Manuscript" && (
-        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
+        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
           <nav className="flex flex-col gap-0.5 text-[13px]">
             <div className="px-2 pb-2 mb-1">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
