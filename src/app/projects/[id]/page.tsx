@@ -12,6 +12,12 @@ const TOP_TABS = ["Book", "Workspace"] as const;
 type TopTab = (typeof TOP_TABS)[number];
 const STAGES = ["Compose", "Manuscript", "Publish"] as const;
 
+const BOOK_LANGUAGES = [
+  "English", "Spanish", "Portuguese", "French", "German", "Italian",
+  "Chinese", "Japanese", "Korean", "Arabic", "Hindi", "Russian",
+  "Dutch", "Swedish", "Polish", "Turkish", "Indonesian", "Vietnamese",
+];
+
 /** Check if HTML content has any visible text */
 function hasContent(html: string): boolean {
   if (!html) return false;
@@ -109,6 +115,9 @@ type BookInfo = {
   promise: string;
   tone: string;
   genre: string;
+  year_published: string;
+  primary_language: string;
+  target_languages: string;
   synopsis: string;
 };
 
@@ -122,6 +131,9 @@ const EMPTY_BOOK_INFO: BookInfo = {
   promise: "",
   tone: "",
   genre: "",
+  year_published: "",
+  primary_language: "",
+  target_languages: "",
   synopsis: "",
 };
 
@@ -140,6 +152,7 @@ function BookInfoPanel({
     { key: "author", label: "Author", placeholder: "e.g. Tony Medina" },
     { key: "genre", label: "Genre", placeholder: "e.g. Self-help, Memoir, Fiction" },
     { key: "tone", label: "Tone", placeholder: "e.g. Warm, direct, conversational" },
+    { key: "year_published", label: "Year Published", placeholder: "e.g. 2026" },
     { key: "one_line_hook", label: "One-Line Hook", multiline: false, placeholder: "A single sentence that captures the essence of the book" },
     { key: "audience", label: "Audience", multiline: true, placeholder: "Who is this book for?" },
     { key: "promise", label: "Promise", multiline: true, placeholder: "What will readers gain or feel by the end?" },
@@ -180,6 +193,69 @@ function BookInfoPanel({
                 </div>
               </div>
             ))}
+
+            {/* ── Language Settings ────────────────────────── */}
+            <div className="mt-4 pt-5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+              <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Language</span>
+            </div>
+
+            {/* Primary Language */}
+            <div className="flex gap-6 mobile-stack" style={{ alignItems: "flex-start" }}>
+              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: 10, letterSpacing: "0.06em", color: "var(--text-muted)" }}>
+                Primary Language
+              </label>
+              <div className="flex-1">
+                <select
+                  value={bookInfo.primary_language}
+                  onChange={(e) => onChange({ ...bookInfo, primary_language: e.target.value })}
+                  className="w-full rounded-md border border-[var(--border-default)] bg-[var(--surface-3)] px-3 py-2 text-[13px] text-[var(--text-secondary)] outline-none cursor-pointer focus:border-[rgba(90,154,245,0.35)] transition-colors"
+                  style={{ colorScheme: "dark" }}
+                >
+                  <option value="">Select language...</option>
+                  {BOOK_LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--text-faint)" }}>The language your original manuscript is written in.</p>
+              </div>
+            </div>
+
+            {/* Target Languages */}
+            <div className="flex gap-6 mobile-stack" style={{ alignItems: "flex-start" }}>
+              <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: 10, letterSpacing: "0.06em", color: "var(--text-muted)" }}>
+                Target Languages
+              </label>
+              <div className="flex-1">
+                {(() => {
+                  const selected = bookInfo.target_languages ? bookInfo.target_languages.split(",").map((l) => l.trim()).filter(Boolean) : [];
+                  const available = BOOK_LANGUAGES.filter((l) => l !== bookInfo.primary_language && !selected.includes(l));
+                  function addLang(lang: string) { if (lang) onChange({ ...bookInfo, target_languages: [...selected, lang].join(", ") }); }
+                  function removeLang(lang: string) { onChange({ ...bookInfo, target_languages: selected.filter((l) => l !== lang).join(", ") }); }
+                  return (
+                    <>
+                      {selected.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {selected.map((lang) => (
+                            <span key={lang} className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px]" style={{ background: "var(--overlay-active)", color: "var(--text-secondary)" }}>
+                              {lang}
+                              <button onClick={() => removeLang(lang)} className="text-[var(--text-faint)] hover:text-[var(--text-primary)] transition-colors" style={{ lineHeight: 1 }}>&times;</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <select
+                        value=""
+                        onChange={(e) => { addLang(e.target.value); e.target.value = ""; }}
+                        className="w-full rounded-md border border-[var(--border-default)] bg-[var(--surface-3)] px-3 py-2 text-[13px] text-[var(--text-secondary)] outline-none cursor-pointer focus:border-[rgba(90,154,245,0.35)] transition-colors"
+                        style={{ colorScheme: "dark" }}
+                      >
+                        <option value="">Add a language...</option>
+                        {available.map((l) => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--text-faint)" }}>Additional languages you may want to create localized editions for.</p>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -438,6 +514,268 @@ function InlineTitle({
   );
 }
 
+/* ─── Publish Sidebar ──────────────────────────────────────── */
+
+function PublishSidebar({
+  chapters, composeTexts, bookVersions, bookInfo, selectedVersionId, onPreview, onAdapt,
+}: {
+  chapters: ChapterData[];
+  composeTexts: Record<string, string>;
+  bookVersions: { id: string; version_number: number; source: string; status: string; created_at: string; derived_status?: string }[];
+  bookInfo: BookInfo;
+  selectedVersionId: string | null;
+  onPreview: (versionId: string) => void;
+  onAdapt: () => void;
+}) {
+  // ── Live data calculations ────────────────────────────────
+  const totalChapters = chapters.length;
+  const totalSections = chapters.reduce((sum, ch) => sum + ch.sections.length, 0);
+
+  // Word count from all composed content
+  const allTexts = Object.values(composeTexts).filter((t) => hasContent(t));
+  const totalWordCount = allTexts.reduce((sum, t) => {
+    const stripped = t.replace(/<[^>]*>/g, "").trim();
+    return sum + stripped.split(/\s+/).filter(Boolean).length;
+  }, 0);
+
+  const estimatedPages = Math.max(1, Math.ceil(totalWordCount / 250));
+
+  // Status logic
+  const hasVersions = bookVersions.length > 0;
+  const hasManuscriptContent = allTexts.length > 0;
+  const latestVersion = bookVersions[0];
+  const latestStatus = latestVersion?.derived_status ?? latestVersion?.status ?? "";
+  const reviewComplete = latestStatus === "finalized";
+
+  type StatusLevel = "complete" | "warning" | "incomplete";
+  const statuses: { label: string; level: StatusLevel }[] = [
+    { label: "Draft Completed", level: hasManuscriptContent ? "complete" : "incomplete" },
+    { label: "Manuscript Ready", level: hasVersions ? "complete" : hasManuscriptContent ? "warning" : "incomplete" },
+    { label: "Review Complete", level: reviewComplete ? "complete" : hasVersions ? "warning" : "incomplete" },
+    { label: "Ready to Publish", level: reviewComplete ? "complete" : "incomplete" },
+  ];
+
+  const dotColor = (level: StatusLevel) =>
+    level === "complete" ? "var(--accent-green)" : level === "warning" ? "#fbbf24" : "var(--text-faint)";
+
+  return (
+    <div className="flex flex-col gap-4 px-4 pt-5 pb-4">
+      {/* 1. Project Info */}
+      <div className="rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] p-4">
+        <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{bookInfo.title || "Untitled"}</span>
+        {bookInfo.subtitle && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-muted)" }}>{bookInfo.subtitle}</p>}
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Author</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.author || "—"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Category</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.genre || "—"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Year Published</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.year_published || "—"}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Quick Info */}
+      <div className="rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] p-4">
+        <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Quick Info</span>
+        <div className="mt-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Total Chapters</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{totalChapters}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Total Sections</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{totalSections}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Word Count</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{totalWordCount.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Estimated Pages</span>
+            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{estimatedPages}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Project Status */}
+      <div className="rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] p-4">
+        <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Project Status</span>
+        <div className="mt-3 flex flex-col gap-2.5">
+          {statuses.map((s) => (
+            <div key={s.label} className="flex items-center gap-2.5">
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor(s.level), flexShrink: 0 }} />
+              <span className="text-[12px]" style={{ color: s.level === "complete" ? "var(--text-secondary)" : "var(--text-muted)" }}>{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Quick Actions */}
+      {(() => {
+        const latestVer = bookVersions[0] ?? null;
+        const selectedVer = selectedVersionId ? bookVersions.find((v) => v.id === selectedVersionId) ?? null : null;
+        const activeVersion = selectedVer || latestVer;
+        const isLatest = activeVersion?.id === latestVer?.id;
+        const actionsEnabled = !!activeVersion;
+
+        return (
+          <div className="rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] p-4">
+            <span className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Quick Actions</span>
+            <div className="mt-3 flex flex-col gap-2">
+              {/* Active version label */}
+              {activeVersion ? (
+                <p className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>
+                  Version: v{activeVersion.version_number} &middot; {new Date(activeVersion.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}{isLatest && !selectedVer ? " (Latest)" : ""}
+                </p>
+              ) : (
+                <p className="text-[11px] mb-1" style={{ color: "var(--text-faint)" }}>No versions available yet</p>
+              )}
+              <button
+                disabled={!actionsEnabled}
+                onClick={() => { if (activeVersion) onPreview(activeVersion.id); }}
+                className="w-full rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)] disabled:opacity-40 disabled:cursor-default"
+                style={{ color: actionsEnabled ? "var(--text-secondary)" : "var(--text-muted)" }}
+              >
+                Preview
+              </button>
+              {/* TODO: Wire download to generate PDF/DOCX export of activeVersion */}
+              <button
+                disabled={!actionsEnabled}
+                className="w-full rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)] disabled:opacity-40 disabled:cursor-default"
+                style={{ color: actionsEnabled ? "var(--text-secondary)" : "var(--text-muted)" }}
+              >
+                Download
+              </button>
+              <button
+                onClick={onAdapt}
+                className="w-full rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Adapt to Another Language
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/* ─── Adapt Language Modal ─────────────────────────────────── */
+
+const ADAPTATION_STYLES = [
+  { value: "faithful", label: "Faithful", desc: "Stays close to original wording" },
+  { value: "natural", label: "Natural", desc: "Prioritizes fluency in target language" },
+  { value: "simple", label: "Simple", desc: "Uses simpler vocabulary and shorter sentences" },
+  { value: "formal", label: "Formal", desc: "Elevates register for professional audiences" },
+  { value: "market-friendly", label: "Market-Friendly", desc: "Adapted for commercial appeal in target market" },
+];
+
+const TONE_HANDLING = [
+  { value: "keep", label: "Keep Original Tone" },
+  { value: "slight", label: "Slightly Localize Tone" },
+  { value: "full", label: "Fully Adapt Tone" },
+];
+
+const LANGUAGE_OPTIONS = BOOK_LANGUAGES;
+
+function AdaptLanguageModal({
+  onClose,
+  onCreate,
+  primaryLanguage,
+  existingLanguages,
+}: {
+  onClose: () => void;
+  onCreate: (config: { targetLanguage: string; adaptationStyle: string; toneHandling: string }) => void;
+  primaryLanguage: string;
+  existingLanguages: string[];
+}) {
+  const [targetLanguage, setTargetLanguage] = useState("");
+  const [adaptationStyle, setAdaptationStyle] = useState("natural");
+  const [toneHandling, setToneHandling] = useState("slight");
+
+  const existingLower = existingLanguages.map((l) => l.toLowerCase());
+  const availableLanguages = LANGUAGE_OPTIONS.filter((l) => !existingLower.includes(l.toLowerCase()));
+
+  const canCreate = targetLanguage.trim() !== "";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Adapt to Another Language</h2>
+        <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "var(--text-muted)" }}>
+          This creates a new localized edition in another language. It preserves meaning and tone, but wording may change naturally for fluency and cultural fit.
+        </p>
+
+        <div className="mt-5 flex flex-col gap-4">
+          {/* Target Language */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Target Language</label>
+            <select
+              value={targetLanguage}
+              onChange={(e) => setTargetLanguage(e.target.value)}
+              className="mt-1 w-full rounded-md border border-[var(--border-default)] bg-[var(--surface-3)] px-3 py-2 text-[13px] text-[var(--text-secondary)] outline-none cursor-pointer focus:border-[rgba(90,154,245,0.35)] transition-colors"
+              style={{ colorScheme: "dark" }}
+            >
+              <option value="">Select language...</option>
+              {availableLanguages.map((l) => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Adaptation Style */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Adaptation Style</label>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {ADAPTATION_STYLES.map((s) => (
+                <label key={s.value} className={`flex items-center gap-2.5 rounded-md px-3 py-2 cursor-pointer transition-colors ${adaptationStyle === s.value ? "bg-[var(--overlay-active)]" : "hover:bg-[var(--overlay-hover)]"}`}>
+                  <input type="radio" name="adapt-style" value={s.value} checked={adaptationStyle === s.value} onChange={() => setAdaptationStyle(s.value)} className="accent-[var(--accent-blue)]" style={{ width: 14, height: 14 }} />
+                  <div>
+                    <span className="text-[13px] font-medium" style={{ color: adaptationStyle === s.value ? "var(--text-primary)" : "var(--text-secondary)" }}>{s.label}</span>
+                    <span className="ml-2 text-[11px]" style={{ color: "var(--text-faint)" }}>{s.desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Tone Handling */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Tone Handling</label>
+            <div className="mt-2 flex flex-col gap-1.5">
+              {TONE_HANDLING.map((t) => (
+                <label key={t.value} className={`flex items-center gap-2.5 rounded-md px-3 py-2 cursor-pointer transition-colors ${toneHandling === t.value ? "bg-[var(--overlay-active)]" : "hover:bg-[var(--overlay-hover)]"}`}>
+                  <input type="radio" name="tone-handle" value={t.value} checked={toneHandling === t.value} onChange={() => setToneHandling(t.value)} className="accent-[var(--accent-blue)]" style={{ width: 14, height: 14 }} />
+                  <span className="text-[13px]" style={{ color: toneHandling === t.value ? "var(--text-primary)" : "var(--text-secondary)" }}>{t.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-primary)]">Cancel</button>
+          <button
+            onClick={() => { if (canCreate) onCreate({ targetLanguage, adaptationStyle, toneHandling }); }}
+            disabled={!canCreate}
+            className="rounded-lg px-5 py-1.5 text-[13px] font-medium text-white transition-colors disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7)", border: "none", cursor: canCreate ? "pointer" : "default" }}
+          >
+            Create Localized Edition
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main ProjectPage ──────────────────────────────────────── */
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -463,6 +801,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [showAdaptModal, setShowAdaptModal] = useState(false);
+  const [publishLang, setPublishLang] = useState("");
   const [topTab, setTopTab] = useState<TopTab>("Book");
   const [workspaceData, setWorkspaceData] = useState<WorkspaceData>(EMPTY_WORKSPACE);
   const workspace = useWorkspace({
@@ -722,6 +1063,32 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     setSendingToPublish(false);
   }
 
+  // ─── Adapt to Another Language ─────────────────────────────
+
+  function handleCreateAdaptedEdition(config: { targetLanguage: string; adaptationStyle: string; toneHandling: string }) {
+    // Add the target language to book_info.target_languages if not already there
+    const currentTargets = bookInfo.target_languages
+      ? bookInfo.target_languages.split(",").map((l) => l.trim()).filter(Boolean)
+      : [];
+    if (!currentTargets.some((l) => l.toLowerCase() === config.targetLanguage.toLowerCase())) {
+      const updated = [...currentTargets, config.targetLanguage].join(", ");
+      const newBookInfo = { ...bookInfo, target_languages: updated };
+      setBookInfo(newBookInfo);
+      handleBookInfoChange(newBookInfo);
+    }
+
+    // TODO: Trigger AI adaptation pipeline here
+    // This would:
+    // 1. Gather all manuscript sections from the primary language
+    // 2. Send to an AI adaptation API with config (targetLanguage, adaptationStyle, toneHandling)
+    // 3. Create a new version record with language = config.targetLanguage
+    // 4. Store the adapted sections
+    // 5. Reload versions
+    console.log("Create adapted edition:", config);
+
+    setShowAdaptModal(false);
+  }
+
   // ─── Derive what to render ─────────────────────────────────
 
   const activeKey = selectionKey(selection);
@@ -782,12 +1149,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {/* Left sidebar */}
         {(topTab === "Workspace" || topTab === "Book") && (
         <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
-          {/* Book | Workspace tabs */}
+          {/* Book | Workspace tabs (hidden on Publish) */}
+          {!(topTab === "Book" && activeStage === "Publish") && (
           <div className="flex items-center gap-1 px-4 pt-4 pb-3 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
             {TOP_TABS.map((tab) => (
               <button key={tab} onClick={() => setTopTab(tab)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${topTab === tab ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={topTab === tab ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{tab}</button>
             ))}
           </div>
+          )}
+
+          {/* Publish sidebar: Project Status panel */}
+          {topTab === "Book" && activeStage === "Publish" && (
+          <PublishSidebar chapters={chapters} composeTexts={composeTexts} bookVersions={bookVersions} bookInfo={bookInfo} selectedVersionId={selectedVersionId} onPreview={(vId) => router.push(`/projects/${projectId}/book/${vId}`)} onAdapt={() => setShowAdaptModal(true)} />
+          )}
 
           {/* Book sidebar content */}
           {topTab === "Book" && activeStage === "Compose" && (
@@ -1031,58 +1405,129 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           /* ─── PUBLISH ─── */
           ) : activeStage === "Publish" ? (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Publish</h2>
-                  <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Snapshots of your manuscript</p>
-                </div>
-              </div>
-              <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-subtle)" }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>All Versions</span>
-                </div>
-                {bookVersions.length === 0 ? (
-                  <div style={{ padding: "32px 14px" }}><p className="text-[13px] text-[var(--text-faint)]">No versions yet. Use &ldquo;Send to Publish&rdquo; from the Manuscript tab to create a snapshot.</p></div>
-                ) : (
-                  <table className="w-full text-[13px]">
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
-                        <th className="pb-2 pl-3.5 pr-1 pt-2.5 font-medium w-10" style={{ fontSize: 11 }}></th>
-                        <th className="pb-2 pr-1 pt-2.5 font-medium w-10" style={{ fontSize: 11 }}></th>
-                        <th className="pb-2 pr-6 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Version</th>
-                        <th className="pb-2 pr-6 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Date</th>
-                        <th className="pb-2 pr-6 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Source</th>
-                        <th className="pb-2 pr-3.5 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {bookVersions.map((v) => {
-                        const ds = v.derived_status ?? v.status;
-                        const statusLabel = ds === "finalized" ? "Finalized" : ds === "in_progress" ? "In Progress" : "Pending";
-                        const statusColor = ds === "finalized" ? "text-green-400" : ds === "in_progress" ? "text-yellow-400" : "text-red-400/60";
-                        return (
-                        <tr key={v.id} className="group" style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--overlay-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
-                          <td className="py-2.5 pl-3.5 pr-1 w-10">
-                            <button onClick={() => router.push(`/projects/${projectId}/book/${v.id}`)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Final Edit">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                            </button>
-                          </td>
-                          <td className="py-2.5 pr-1 w-10">
-                            <button onClick={() => console.log("Print PDF - version:", v.id)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Print PDF">
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
-                            </button>
-                          </td>
-                          <td className="py-2.5 pr-6 font-medium text-[var(--text-primary)]">Version {v.version_number}</td>
-                          <td className="py-2.5 pr-6 text-[var(--text-tertiary)]">{new Date(v.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</td>
-                          <td className="py-2.5 pr-6 text-[var(--text-tertiary)] capitalize">{v.source} snapshot</td>
-                          <td className="py-2.5 pr-3.5"><span className={`text-lg ${statusColor}`} title={statusLabel}>&#9679;</span></td>
-                        </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              {(() => {
+                const primaryLang = bookInfo.primary_language?.trim() || "English";
+                const targetLangs = bookInfo.target_languages
+                  ? bookInfo.target_languages.split(",").map((l) => l.trim()).filter(Boolean)
+                  : [];
+                const allLangs = [primaryLang, ...targetLangs.filter((l) => l.toLowerCase() !== primaryLang.toLowerCase())];
+
+                // Group versions by language
+                const versionsByLang: Record<string, typeof bookVersions> = {};
+                for (const lang of allLangs) versionsByLang[lang] = [];
+                for (const v of bookVersions) {
+                  const vLang = (v as Record<string, unknown>).language as string | undefined;
+                  const lang = vLang?.trim() || primaryLang;
+                  if (!versionsByLang[lang]) versionsByLang[lang] = [];
+                  versionsByLang[lang].push(v);
+                }
+
+                // Selected language (default to primary)
+                const activeLang = publishLang || primaryLang;
+                const isPrimary = activeLang.toLowerCase() === primaryLang.toLowerCase();
+                const versions = versionsByLang[activeLang] ?? [];
+                const editionLabel = isPrimary ? "Original" : versions.length > 0 ? "Adapted Edition" : "Not created yet";
+                const editionColor = isPrimary ? "var(--accent-green)" : versions.length > 0 ? "var(--accent-blue)" : "var(--text-faint)";
+
+                return (
+                  <>
+                    {/* Header with language selector */}
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Publish</h2>
+                        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Manage editions and snapshots of your manuscript</p>
+                      </div>
+                      {allLangs.length > 1 && (
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={activeLang}
+                            onChange={(e) => setPublishLang(e.target.value)}
+                            className="rounded-md border border-[var(--border-default)] bg-[var(--surface-3)] px-3 py-1.5 text-[13px] text-[var(--text-secondary)] outline-none cursor-pointer"
+                            style={{ colorScheme: "dark" }}
+                          >
+                            {allLangs.map((l) => {
+                              const lIsPrimary = l.toLowerCase() === primaryLang.toLowerCase();
+                              const lVersions = versionsByLang[l] ?? [];
+                              const suffix = lIsPrimary ? " (Original)" : lVersions.length > 0 ? ` (${lVersions.length})` : "";
+                              return <option key={l} value={l}>{l}{suffix}</option>;
+                            })}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Single edition card for selected language */}
+                    <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
+                      <div className="flex items-center gap-3" style={{ padding: "12px 14px 10px", borderBottom: "1px solid var(--border-subtle)" }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{activeLang}</span>
+                        <span style={{ fontSize: 10, fontWeight: 500, padding: "1px 8px", borderRadius: 20, background: isPrimary ? "rgba(74,222,128,0.12)" : versions.length > 0 ? "rgba(90,154,245,0.12)" : "var(--overlay-hover)", color: editionColor }}>{editionLabel}</span>
+                        {versions.length > 0 && <span className="ml-auto text-[11px]" style={{ color: "var(--text-faint)" }}>{versions.length} version{versions.length !== 1 ? "s" : ""}</span>}
+                      </div>
+
+                      {versions.length === 0 ? (
+                        <div style={{ padding: "28px 14px" }} className="text-center">
+                          <p className="text-[13px]" style={{ color: "var(--text-faint)" }}>
+                            {isPrimary ? "No versions yet. Use \u201CSend to Publish\u201D from the Manuscript tab to create a snapshot." : "No edition created yet."}
+                          </p>
+                          {!isPrimary && (
+                            <p className="text-[11px] mt-2" style={{ color: "var(--text-faint)" }}>Language adaptation coming soon.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <table className="w-full text-[13px]">
+                          <thead>
+                            <tr style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                              <th className="pb-2 pl-3.5 pr-4 pt-2.5 text-center font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", width: 60 }}>Version</th>
+                              <th className="pb-2 pr-4 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Title</th>
+                              <th className="pb-2 pr-4 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Category</th>
+                              <th className="pb-2 pr-4 pt-2.5 text-center font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Published</th>
+                              <th className="pb-2 pr-4 pt-2.5 text-left font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Prep Date</th>
+                              <th className="pb-2 pr-1 pt-2.5 text-center font-medium" style={{ fontSize: 11, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)" }}>Status</th>
+                              <th className="pb-2 pr-1 pt-2.5 font-medium w-10" style={{ fontSize: 11 }}></th>
+                              <th className="pb-2 pr-3.5 pt-2.5 font-medium w-10" style={{ fontSize: 11 }}></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {versions.map((v) => {
+                              const ds = v.derived_status ?? v.status;
+                              const statusLabel = ds === "finalized" ? "Finalized" : ds === "in_progress" ? "In Progress" : "Pending";
+                              const statusColor = ds === "finalized" ? "text-green-400" : ds === "in_progress" ? "text-yellow-400" : "text-red-400/60";
+                              const isSelected = selectedVersionId === v.id;
+                              return (
+                              <tr
+                                key={v.id}
+                                className="group cursor-pointer"
+                                style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s", background: isSelected ? "var(--overlay-active)" : "transparent" }}
+                                onClick={() => setSelectedVersionId(isSelected ? null : v.id)}
+                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = "var(--overlay-hover)"; }}
+                                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                              >
+                                <td className="py-2.5 pl-3.5 pr-4 text-center font-medium text-[var(--text-primary)]">V{v.version_number}</td>
+                                <td className="py-2.5 pr-4 text-[var(--text-secondary)]">{bookInfo.title || "Untitled"}</td>
+                                <td className="py-2.5 pr-4 text-[var(--text-tertiary)]">{bookInfo.genre || "—"}</td>
+                                <td className="py-2.5 pr-4 text-center text-[var(--text-tertiary)]">{bookInfo.year_published || "—"}</td>
+                                <td className="py-2.5 pr-4 text-[var(--text-tertiary)]">{new Date(v.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</td>
+                                <td className="py-2.5 pr-1 text-center"><span className={`text-lg ${statusColor}`} title={statusLabel}>&#9679;</span></td>
+                                <td className="py-2.5 pr-1 w-10">
+                                  <button onClick={(e) => { e.stopPropagation(); router.push(`/projects/${projectId}/book/${v.id}`); }} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Final Edit">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                                  </button>
+                                </td>
+                                <td className="py-2.5 pr-3.5 w-10">
+                                  <button onClick={(e) => { e.stopPropagation(); console.log("Print PDF - version:", v.id); }} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Print PDF">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+                                  </button>
+                                </td>
+                              </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           ) : (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4"><p className="text-[13px] text-[var(--text-faint)]">Select a tab above.</p></div>
@@ -1090,6 +1535,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </div>}
         </div>
       </div>
+
+      {/* Adapt Language Modal */}
+      {showAdaptModal && (
+        <AdaptLanguageModal
+          onClose={() => setShowAdaptModal(false)}
+          onCreate={handleCreateAdaptedEdition}
+          primaryLanguage={bookInfo.primary_language?.trim() || "English"}
+          existingLanguages={[
+            bookInfo.primary_language?.trim() || "English",
+            ...(bookInfo.target_languages ? bookInfo.target_languages.split(",").map((l) => l.trim()).filter(Boolean) : []),
+          ]}
+        />
+      )}
 
       {/* Confirm remove chapter dialog */}
       {confirmRemoveChapter && (

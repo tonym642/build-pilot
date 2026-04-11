@@ -466,7 +466,7 @@ function LibraryView({
                 value={activeChunkIdx}
                 onChange={(e) => setActiveChunkIdx(Number(e.target.value))}
                 className="rounded border border-[var(--border-default)] bg-[var(--surface-3)] px-2 py-1 text-[12px] text-[var(--text-secondary)] outline-none cursor-pointer"
-                style={{ maxWidth: 260 }}
+                style={{ colorScheme: "dark", maxWidth: 260 }}
               >
                 {chunks.map((c, i) => (
                   <option key={c.chunk_id} value={i}>{c.chunk_title} ({c.word_count}w)</option>
