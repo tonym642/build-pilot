@@ -186,7 +186,7 @@ export function RichTextEditor({
   if (!editor) return null;
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] transition-colors focus-within:border-[rgba(90,154,245,0.35)]">
+    <div className="flex h-full flex-col rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] transition-colors focus-within:border-[rgba(90,154,245,0.35)]">
       {/* Toolbar */}
       <div
         className="shrink-0 flex items-center border-b border-[var(--border-default)] px-3"

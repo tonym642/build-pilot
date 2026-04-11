@@ -1,3 +1,5 @@
+import { ThemeToggle } from "./theme-context";
+
 export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   return (
     <header
@@ -29,13 +31,16 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
         </svg>
       </button>
 
-      {/* Spacer for desktop (keeps avatar right-aligned) */}
-      <div className="mobile-hidden" />
+      {/* Spacer for desktop (keeps items right-aligned) */}
+      <div className="mobile-hidden flex-1" />
 
-      <div
-        className="h-7 w-7 rounded-full"
-        style={{ background: "rgba(255,255,255,0.06)" }}
-      />
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <div
+          className="h-7 w-7 rounded-full"
+          style={{ background: "var(--overlay-active)" }}
+        />
+      </div>
     </header>
   );
 }

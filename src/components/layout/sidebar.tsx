@@ -105,15 +105,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 gap: 10,
                 padding: "7px 10px",
                 borderRadius: 6,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: 500,
                 color: isActive ? "var(--text-primary)" : "var(--text-tertiary)",
-                background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
+                background: isActive ? "var(--overlay-active)" : "transparent",
                 transition: "all 0.12s",
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.background = "rgba(255,255,255,0.04)";
+                  e.currentTarget.style.background = "var(--overlay-hover)";
                   e.currentTarget.style.color = "var(--text-secondary)";
                 }
               }}

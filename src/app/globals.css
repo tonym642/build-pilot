@@ -25,6 +25,39 @@
   --border-hover: rgba(255, 255, 255, 0.14);
 }
 
+/* ─── Theme-aware overlay colors ──────────────────────── */
+:root {
+  --overlay-hover: rgba(255, 255, 255, 0.04);
+  --overlay-active: rgba(255, 255, 255, 0.06);
+  --overlay-card: rgba(255, 255, 255, 0.03);
+}
+
+/* ─── Light theme ─────────────────────────────────────── */
+[data-theme="light"] {
+  --text-primary: #111318;
+  --text-secondary: #2d3140;
+  --text-tertiary: rgba(0, 0, 0, 0.6);
+  --text-muted: rgba(0, 0, 0, 0.5);
+  --text-faint: rgba(0, 0, 0, 0.35);
+
+  --accent-blue: #2563eb;
+  --accent-purple: #7c3aed;
+  --accent-green: #16a34a;
+
+  --surface-0: #f0f1f4;
+  --surface-1: #f8f9fb;
+  --surface-2: #ffffff;
+  --surface-3: #f0f1f4;
+
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-hover: rgba(0, 0, 0, 0.2);
+
+  --overlay-hover: rgba(0, 0, 0, 0.04);
+  --overlay-active: rgba(0, 0, 0, 0.07);
+  --overlay-card: #ffffff;
+}
+
 * {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -35,7 +68,7 @@
 }
 
 html {
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.55;
 }
 

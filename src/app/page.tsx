@@ -209,7 +209,7 @@ function HomePageContent() {
           className="flex items-center justify-between"
           style={{
             padding: "10px 14px 8px",
-            borderBottom: "1px solid rgba(255,255,255,0.04)",
+            borderBottom: "1px solid var(--border-subtle)",
           }}
         >
           <span
@@ -285,7 +285,7 @@ function HomePageContent() {
                     key={project.id}
                     className="group cursor-pointer"
                     style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.025)")}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--overlay-hover)")}
                     onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
                   >
                     <td className="py-2.5 pl-3.5 pr-6">
@@ -346,7 +346,7 @@ function HomePageContent() {
                           border: "none",
                           transition: "all 0.12s",
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; e.currentTarget.style.background = "var(--overlay-active)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-muted)"; e.currentTarget.style.background = "transparent"; }}
                       >
                         {showArchived ? "Unarchive" : "Archive"}
@@ -395,7 +395,7 @@ function HomePageContent() {
               className="mb-4 w-full text-[13px]"
               style={{
                 padding: "7px 10px",
-                background: "rgba(255,255,255,0.03)",
+                background: "var(--overlay-card)",
                 border: "1px solid var(--border-default)",
                 borderRadius: 6,
                 color: "var(--text-primary)",
@@ -414,7 +414,7 @@ function HomePageContent() {
               style={{
                 appearance: "none",
                 padding: "7px 28px 7px 10px",
-                background: "rgba(255,255,255,0.03)",
+                background: "var(--overlay-card)",
                 border: "1px solid var(--border-default)",
                 borderRadius: 6,
                 color: "var(--text-primary)",
@@ -442,7 +442,7 @@ function HomePageContent() {
                 style={{
                   height: 28,
                   padding: "0 10px",
-                  background: "rgba(255,255,255,0.04)",
+                  background: "var(--overlay-hover)",
                   border: "1px solid var(--border-default)",
                   borderRadius: 6,
                   color: "var(--text-secondary)",

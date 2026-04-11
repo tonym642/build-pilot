@@ -6,6 +6,7 @@ import Link from "next/link";
 import AppMode from "./app-mode";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { ThemeToggle } from "@/components/layout/theme-context";
 
 
 const STAGES = ["Compose", "Manuscript", "Publish"] as const;
@@ -147,7 +148,7 @@ function BookInfoPanel({
   return (
     <div className="flex h-full min-h-0 gap-4 p-6 mobile-stack mobile-px-4">
       {/* Left card: fields */}
-      <div className="flex-1 overflow-y-auto rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)]">
+      <div className="flex-1 overflow-y-auto rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
         <div className="px-6 py-6" style={{ maxWidth: 720 }}>
           <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Book Info</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Project metadata — not included in the manuscript.</p>
@@ -164,7 +165,7 @@ function BookInfoPanel({
                       value={bookInfo[key]}
                       onChange={(e) => onChange({ ...bookInfo, [key]: e.target.value })}
                       placeholder={placeholder}
-                      className="w-full resize-none rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+                      className="w-full resize-none rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
                     />
                   ) : (
                     <input
@@ -172,7 +173,7 @@ function BookInfoPanel({
                       value={bookInfo[key]}
                       onChange={(e) => onChange({ ...bookInfo, [key]: e.target.value })}
                       placeholder={placeholder}
-                      className="w-full rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
+                      className="w-full rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
                     />
                   )}
                 </div>
@@ -183,7 +184,7 @@ function BookInfoPanel({
       </div>
 
       {/* Right card: synopsis */}
-      <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)]">
+      <div className="flex-1 flex flex-col min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
         <div className="px-6 pt-6 pb-3">
           <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Synopsis</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>A detailed overview of your book&rsquo;s narrative, structure, and key themes.</p>
@@ -284,7 +285,7 @@ function AiPanel({
         <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
         <div className="flex items-center gap-1" style={{ overflowX: "auto" }}>
           {AI_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[rgba(255,255,255,0.08)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
+            <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
           ))}
         </div>
       </div>
@@ -293,7 +294,7 @@ function AiPanel({
           {filtered.map((msg) => (
             <div key={msg.id}>
               {msg.role === "user" ? (
-                <div className="flex justify-end"><p className="max-w-[85%] rounded-lg bg-[rgba(255,255,255,0.06)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p></div>
+                <div className="flex justify-end"><p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p></div>
               ) : (
                 <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><AiActionBar message={msg} onUpdate={onUpdateMessage} /></div>
               )}
@@ -303,10 +304,10 @@ function AiPanel({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.04)", background: "rgba(10,15,26,0.5)" }}>
+      <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
         <div
           className="flex items-center gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
-          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}
+          style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}
         >
           <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1 }}>+</span>
           <input
@@ -398,7 +399,7 @@ function ComposePage({
       )}
       {aiPanelOpen && (
         <div className="min-h-0 flex flex-col pr-6 pb-6" style={{ width: `${100 - dividerX}%` }}>
-          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)]">
+          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
             <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={sectionTitle} onAddMessage={onAddAiMessage} />
           </div>
         </div>
@@ -729,6 +730,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {bookInfo.genre && <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>{bookInfo.genre}</span>}
         <span className="mobile-hidden" style={{ fontSize: 10, fontWeight: 500, padding: "1px 6px", borderRadius: 3, background: projectType === "Book" ? "rgba(74,222,128,0.18)" : projectType === "Music" ? "rgba(90,154,245,0.18)" : "rgba(251,191,36,0.18)", color: projectType === "Book" ? "#4ade80" : projectType === "Music" ? "#5a9af5" : "#fbbf24" }}>{projectType}</span>
         <div style={{ flex: 1 }} />
+        <ThemeToggle />
         <Link href="/" className="text-[13px] font-medium transition-colors" style={{ color: "var(--text-muted)" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-secondary)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}>Exit</Link>
       </div>
 
@@ -739,13 +741,13 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {/* Left sidebar — Compose mode */}
         {activeStage === "Compose" && (
         <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
-          <nav className="flex flex-col gap-0.5 text-[13px]">
-            <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors ${selection.type === "book_info" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
-            <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors ${selection.type === "prologue" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
+          <nav className="flex flex-col gap-0.5 text-[14px]">
+            <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
+            <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "prologue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
 
             {/* Chapters */}
             <div className="mt-2 mb-1 flex items-center justify-between px-2">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
               <button onClick={handleAddChapter} title="Add chapter" className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" /></svg>
               </button>
@@ -767,11 +769,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         value={ch.title}
                         onChange={(v) => handleRenameChapter(ch.id, v)}
                         autoFocus={autoFocusId === ch.id}
-                        className="text-[13px] font-medium min-w-0"
+                        className="text-[14px] font-medium min-w-0"
                         style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 1 auto" }}
                       />
                       {ch.sections.length > 0 && (
-                        <span className="shrink-0 text-[10px] ml-1" style={{ color: "var(--text-faint)" }}>({ch.sections.length})</span>
+                        <span className="shrink-0 text-[11px] ml-1" style={{ color: "var(--text-faint)" }}>({ch.sections.length})</span>
                       )}
                     </button>
                     <button onClick={() => handleAddSection(ch.id)} title="Add section" className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
@@ -787,12 +789,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         const isSectionActive = selection.type === "section" && selection.sectionId === sec.id;
                         return (
                           <div key={sec.id} className="group/sec flex items-center">
-                            <button onClick={() => setSelection({ type: "section", chapterId: ch.id, sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isSectionActive ? "bg-[rgba(255,255,255,0.06)]" : ""}`}>
+                            <button onClick={() => setSelection({ type: "section", chapterId: ch.id, sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isSectionActive ? "bg-[var(--overlay-active)]" : ""}`}>
                               <InlineTitle
                                 value={sec.title}
                                 onChange={(v) => handleRenameSection(ch.id, sec.id, v)}
                                 autoFocus={autoFocusId === sec.id}
-                                className="w-full text-[12px]"
+                                className="w-full text-[13px]"
                                 style={{ color: isSectionActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                               />
                             </button>
@@ -807,7 +809,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         );
                       })}
                       {ch.sections.length === 0 && (
-                        <button onClick={() => handleAddSection(ch.id)} className="px-2 py-1 text-[11px] text-[var(--text-faint)] hover:text-[var(--accent-blue)] transition-colors text-left">+ Add Section</button>
+                        <button onClick={() => handleAddSection(ch.id)} className="px-2 py-1 text-[12px] text-[var(--text-faint)] hover:text-[var(--accent-blue)] transition-colors text-left">+ Add Section</button>
                       )}
                     </div>
                   )}
@@ -816,7 +818,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             })}
 
             {/* Epilogue */}
-            <button onClick={() => setSelection({ type: "epilogue" })} className={`mt-1 w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors ${selection.type === "epilogue" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
+            <button onClick={() => setSelection({ type: "epilogue" })} className={`mt-1 w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "epilogue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
           </nav>
         </aside>
         )}
@@ -826,14 +828,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
           <nav className="flex flex-col gap-0.5 text-[13px]">
             <div className="px-2 pb-2 mb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
             </div>
 
             {/* Prologue */}
             {hasContent(composeTexts["prologue"] ?? "") && (
               <button
                 onClick={() => document.getElementById("ms-prologue")?.scrollIntoView({ behavior: "smooth" })}
-                className="w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+                className="w-full rounded px-2 py-1.5 text-left text-[14px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
               >
                 Prologue
               </button>
@@ -856,7 +858,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     </button>
                     <button
                       onClick={() => document.getElementById(`ms-ch-${ch.id}`)?.scrollIntoView({ behavior: "smooth" })}
-                      className="flex-1 rounded px-1 py-1.5 text-left text-[13px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-w-0"
+                      className="flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-w-0"
                       style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     >
                       {ch.title}
@@ -868,7 +870,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         <button
                           key={sec.id}
                           onClick={() => document.getElementById(`ms-sec-${sec.id}`)?.scrollIntoView({ behavior: "smooth" })}
-                          className="w-full rounded px-2 py-1 text-left text-[12px] text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors min-w-0"
+                          className="w-full rounded px-2 py-1 text-left text-[13px] text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors min-w-0"
                           style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                         >
                           {sec.title}
@@ -884,7 +886,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             {hasContent(composeTexts["epilogue"] ?? "") && (
               <button
                 onClick={() => document.getElementById("ms-epilogue")?.scrollIntoView({ behavior: "smooth" })}
-                className="mt-1 w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+                className="mt-1 w-full rounded px-2 py-1.5 text-left text-[14px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
               >
                 Epilogue
               </button>
@@ -898,7 +900,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* Stage navigation */}
           <div className="flex shrink-0 gap-1 px-8 mobile-px-4" style={{ overflowX: "auto", paddingTop: 20, paddingBottom: 20 }}>
             {STAGES.map((stage) => (
-              <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.04)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
+              <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
             ))}
           </div>
           <div className="flex-1 min-h-0 overflow-hidden">
@@ -981,7 +983,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
               </div>
               <div style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid var(--border-subtle)" }}>
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>All Versions</span>
                 </div>
                 {bookVersions.length === 0 ? (
@@ -1004,14 +1006,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         const statusLabel = ds === "finalized" ? "Finalized" : ds === "in_progress" ? "In Progress" : "Pending";
                         const statusColor = ds === "finalized" ? "text-green-400" : ds === "in_progress" ? "text-yellow-400" : "text-red-400/60";
                         return (
-                        <tr key={v.id} className="group" style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s" }} onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.025)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
+                        <tr key={v.id} className="group" style={{ borderBottom: "1px solid var(--border-subtle)", transition: "background 0.12s" }} onMouseEnter={(e) => (e.currentTarget.style.background = "var(--overlay-hover)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
                           <td className="py-2.5 pl-3.5 pr-1 w-10">
-                            <button onClick={() => router.push(`/projects/${projectId}/book/${v.id}`)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]" title="Final Edit">
+                            <button onClick={() => router.push(`/projects/${projectId}/book/${v.id}`)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Final Edit">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                             </button>
                           </td>
                           <td className="py-2.5 pr-1 w-10">
-                            <button onClick={() => console.log("Print PDF - version:", v.id)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-tertiary)]" title="Print PDF">
+                            <button onClick={() => console.log("Print PDF - version:", v.id)} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Print PDF">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
                             </button>
                           </td>
@@ -1041,7 +1043,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <h2 className="text-base font-semibold text-[var(--text-primary)]">Remove chapter?</h2>
             <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">All sections, content, and AI conversations for this chapter will be permanently deleted.</p>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setConfirmRemoveChapter(null)} className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]">Cancel</button>
+              <button onClick={() => setConfirmRemoveChapter(null)} className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-primary)]">Cancel</button>
               <button onClick={() => handleRemoveChapter(confirmRemoveChapter)} className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500">Remove</button>
             </div>
           </div>
