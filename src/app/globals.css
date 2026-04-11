@@ -115,3 +115,12 @@ body {
 .prose-rendered p:last-child {
   margin-bottom: 0;
 }
+.prose-rendered hr {
+  display: none;
+}
+.prose-rendered p:empty {
+  display: none;
+}
+.tiptap hr {
+  display: none;
+}

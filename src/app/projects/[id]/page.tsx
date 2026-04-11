@@ -16,6 +16,15 @@ function hasContent(html: string): boolean {
   const stripped = html.replace(/<[^>]*>/g, "").trim();
   return stripped.length > 0;
 }
+
+/** Remove paragraphs that only contain dashes/horizontal rules */
+function cleanManuscriptHtml(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<p>\s*[-–—]{2,}\s*<\/p>/gi, "")
+    .replace(/<p>\s*---\s*<\/p>/gi, "")
+    .replace(/<hr\s*\/?>/gi, "");
+}
 type Stage = (typeof STAGES)[number];
 
 /* ─── AI message with metadata ──────────────────────────────── */
@@ -863,12 +872,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
 
                 {/* Prologue */}
+                {/* Prologue */}
                 {hasContent(composeTexts["prologue"] ?? "") && (
-                  <div className="mb-8" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                    <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>Prologue</span>
-                    </div>
-                    <div style={{ padding: "16px 20px" }}><div className="prose-rendered" dangerouslySetInnerHTML={{ __html: composeTexts["prologue"] ?? "" }} /></div>
+                  <div className="mb-10">
+                    <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Prologue</h3>
+                    <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["prologue"] ?? "") }} />
                   </div>
                 )}
 
@@ -877,14 +885,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   const sectionsWithContent = ch.sections.filter((sec) => hasContent(composeTexts[sec.id] ?? ""));
                   if (sectionsWithContent.length === 0) return null;
                   return (
-                    <div key={ch.id} className="mb-8">
-                      <h3 className="text-[16px] font-semibold mb-3" style={{ color: "var(--text-primary)" }}>{ch.title}</h3>
+                    <div key={ch.id} className="mb-10">
+                      <h3 className="text-[16px] font-semibold mb-5 pt-6" style={{ color: "var(--text-primary)", borderTop: "1px solid var(--border-default)" }}>{ch.title}</h3>
                       {sectionsWithContent.map((sec) => (
-                        <div key={sec.id} className="mb-4" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                          <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>{sec.title}</span>
-                          </div>
-                          <div style={{ padding: "16px 20px" }}><div className="prose-rendered" dangerouslySetInnerHTML={{ __html: composeTexts[sec.id] ?? "" }} /></div>
+                        <div key={sec.id} className="mb-6">
+                          <h4 className="text-[13px] font-medium mb-3" style={{ color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{sec.title}</h4>
+                          <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts[sec.id] ?? "") }} />
                         </div>
                       ))}
                     </div>
@@ -893,11 +899,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
                 {/* Epilogue */}
                 {hasContent(composeTexts["epilogue"] ?? "") && (
-                  <div className="mb-8" style={{ background: "var(--surface-2)", border: "1px solid var(--border-subtle)", borderRadius: 10, overflow: "hidden" }}>
-                    <div style={{ padding: "10px 14px 8px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--text-muted)" }}>Epilogue</span>
-                    </div>
-                    <div style={{ padding: "16px 20px" }}><div className="prose-rendered" dangerouslySetInnerHTML={{ __html: composeTexts["epilogue"] ?? "" }} /></div>
+                  <div className="mb-10">
+                    <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Epilogue</h3>
+                    <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["epilogue"] ?? "") }} />
                   </div>
                 )}
 
