@@ -280,7 +280,7 @@ function AiPanel({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 flex items-center px-4 pt-3 pb-2" style={{ height: 40 }}>
+      <div className="shrink-0 flex items-center px-4 pt-3 pb-2 border-b border-[var(--border-default)]" style={{ height: 46 }}>
         <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
         <div className="flex items-center gap-1" style={{ overflowX: "auto" }}>
           {AI_FILTERS.map((f) => (
@@ -303,12 +303,47 @@ function AiPanel({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="shrink-0 px-4 py-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] px-3 py-2.5 transition-colors focus-within:border-[rgba(90,154,245,0.35)] focus-within:bg-[rgba(255,255,255,0.05)]">
-          <textarea value={input} onChange={(e) => { setInput(e.target.value); const el = e.target; el.style.height = "auto"; el.style.height = `${Math.min(el.scrollHeight, 200)}px`; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} placeholder="Ask a question or share an idea…" rows={1} style={{ minHeight: "1.5rem", maxHeight: "12.5rem" }} className="flex-1 resize-none overflow-y-auto bg-transparent py-0.5 text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)] outline-none leading-relaxed" />
-          {loading ? <div className="mb-0.5 shrink-0 flex h-7 w-7 items-center justify-center"><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--text-tertiary)]" /></div>
-          : input.trim() ? <button type="button" aria-label="Send" onClick={handleSubmit} className="mb-0.5 shrink-0 rounded-full bg-white p-1.5 text-black transition-opacity hover:opacity-80"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="13" x2="8" y2="3" /><polyline points="4,7 8,3 12,7" /></svg></button>
-          : null}
+      <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid rgba(255,255,255,0.04)", background: "rgba(10,15,26,0.5)" }}>
+        <div
+          className="flex items-center gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
+          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}
+        >
+          <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1 }}>+</span>
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }}
+            placeholder="Add an idea, ask a question, or give direction..."
+            className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)]"
+            style={{ padding: "5px 0", fontFamily: "inherit" }}
+          />
+          {loading ? (
+            <div className="flex items-center justify-center" style={{ width: 24, height: 24, flexShrink: 0 }}>
+              <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--text-tertiary)]" />
+            </div>
+          ) : (
+            <button
+              type="button"
+              aria-label="Send"
+              onClick={handleSubmit}
+              disabled={!input.trim()}
+              className="flex items-center justify-center transition-colors"
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: "50%",
+                border: "none",
+                flexShrink: 0,
+                cursor: input.trim() ? "pointer" : "default",
+                fontSize: 12,
+                background: input.trim() ? "#fff" : "transparent",
+                color: input.trim() ? "var(--surface-1)" : "var(--text-faint)",
+              }}
+            >
+              ↑
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -368,43 +403,6 @@ function ComposePage({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ─── Chapter Overview (shown when clicking a chapter) ──────── */
-
-function ChapterOverview({
-  chapter, sections, onAddSection, onSelectSection,
-}: {
-  chapter: ChapterData; sections: SectionData[]; onAddSection: () => void; onSelectSection: (sectionId: string) => void;
-}) {
-  return (
-    <div className="overflow-y-auto h-full px-8 py-8 mobile-px-4">
-      <div style={{ maxWidth: 720 }}>
-        <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>{chapter.title}</h2>
-        <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>{sections.length} section{sections.length !== 1 ? "s" : ""}</p>
-        <div className="mt-6 flex flex-col gap-2">
-          {sections.map((sec) => (
-            <button
-              key={sec.id}
-              onClick={() => onSelectSection(sec.id)}
-              className="w-full rounded-lg border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-left text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-[var(--text-primary)]"
-            >
-              {sec.title}
-            </button>
-          ))}
-          {sections.length === 0 && (
-            <p className="text-[13px] text-[var(--text-faint)] mb-4">No sections yet. Add one to start writing.</p>
-          )}
-          <button
-            onClick={onAddSection}
-            className="mt-2 text-[12px] font-medium text-[var(--accent-blue)] hover:underline self-start"
-          >
-            + Add Section
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -598,7 +596,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     };
     setChapters((prev) => [...prev, newChapter]);
     setExpandedChapters((prev) => ({ ...prev, [id]: true }));
-    setSelection({ type: "chapter", chapterId: id });
+    setSelection({ type: "section", chapterId: id, sectionId });
     setAutoFocusId(id);
   }
 
@@ -725,7 +723,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <button className="flex items-center justify-center" onClick={openMainSidebar} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Open navigation">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 4h12M2 8h12M2 12h12" /></svg>
         </button>
-        <span className="text-[18px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+        <span className="text-[20px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
           {bookInfo.title || projectName || "Untitled Project"}
         </span>
         {bookInfo.genre && <span className="mobile-hidden text-[13px]" style={{ color: "var(--text-muted)" }}>{bookInfo.genre}</span>}
@@ -738,14 +736,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       <div className="flex flex-1 min-h-0 overflow-hidden" style={{ position: "relative" }}>
         {mobileSidebarOpen && <div className="desktop-hidden" style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} onClick={() => setMobileSidebarOpen(false)} />}
 
-        {/* Left sidebar */}
-        {activeStage !== "Publish" && (
+        {/* Left sidebar — Compose mode */}
+        {activeStage === "Compose" && (
         <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
           <nav className="flex flex-col gap-0.5 text-[13px]">
-            {/* Book Info */}
             <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors ${selection.type === "book_info" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
-
-            {/* Prologue */}
             <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors ${selection.type === "prologue" ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
 
             {/* Chapters */}
@@ -767,7 +762,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <button onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))} className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors" style={{ width: 16, height: 16 }}>
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
                     </button>
-                    <button onClick={() => { setSelection({ type: "chapter", chapterId: ch.id }); if (!isExpanded) setExpandedChapters((prev) => ({ ...prev, [ch.id]: true })); }} className={`flex-1 rounded px-1 py-1.5 text-left min-w-0 transition-colors flex items-baseline ${isChapterActive ? "bg-[rgba(255,255,255,0.06)]" : ""}`}>
+                    <button onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))} className={`flex-1 rounded px-1 py-1.5 text-left min-w-0 transition-colors flex items-baseline ${isChapterActive || isChildActive ? "" : ""}`}>
                       <InlineTitle
                         value={ch.title}
                         onChange={(v) => handleRenameChapter(ch.id, v)}
@@ -826,6 +821,78 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         </aside>
         )}
 
+        {/* Left sidebar — Manuscript TOC */}
+        {activeStage === "Manuscript" && (
+        <aside className={`shrink-0 border-r border-[var(--border-default)] px-4 py-4 overflow-y-auto ${mobileSidebarOpen ? "" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41 }}>
+          <nav className="flex flex-col gap-0.5 text-[13px]">
+            <div className="px-2 pb-2 mb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
+            </div>
+
+            {/* Prologue */}
+            {hasContent(composeTexts["prologue"] ?? "") && (
+              <button
+                onClick={() => document.getElementById("ms-prologue")?.scrollIntoView({ behavior: "smooth" })}
+                className="w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                Prologue
+              </button>
+            )}
+
+            {/* Chapters + sections */}
+            {chapters.map((ch) => {
+              const sectionsWithContent = ch.sections.filter((sec) => hasContent(composeTexts[sec.id] ?? ""));
+              if (sectionsWithContent.length === 0) return null;
+              const isExpanded = expandedChapters[ch.id] ?? true;
+              return (
+                <div key={ch.id}>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))}
+                      className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                      style={{ width: 16, height: 16 }}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
+                    </button>
+                    <button
+                      onClick={() => document.getElementById(`ms-ch-${ch.id}`)?.scrollIntoView({ behavior: "smooth" })}
+                      className="flex-1 rounded px-1 py-1.5 text-left text-[13px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-w-0"
+                      style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    >
+                      {ch.title}
+                    </button>
+                  </div>
+                  {isExpanded && (
+                    <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                      {sectionsWithContent.map((sec) => (
+                        <button
+                          key={sec.id}
+                          onClick={() => document.getElementById(`ms-sec-${sec.id}`)?.scrollIntoView({ behavior: "smooth" })}
+                          className="w-full rounded px-2 py-1 text-left text-[12px] text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors min-w-0"
+                          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        >
+                          {sec.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Epilogue */}
+            {hasContent(composeTexts["epilogue"] ?? "") && (
+              <button
+                onClick={() => document.getElementById("ms-epilogue")?.scrollIntoView({ behavior: "smooth" })}
+                className="mt-1 w-full rounded px-2 py-1.5 text-left text-[13px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors"
+              >
+                Epilogue
+              </button>
+            )}
+          </nav>
+        </aside>
+        )}
+
         {/* Main content */}
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           {/* Stage navigation */}
@@ -838,13 +905,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* ─── COMPOSE ─── */}
           {activeStage === "Compose" && selection.type === "book_info" ? (
             <BookInfoPanel bookInfo={bookInfo} onChange={handleBookInfoChange} />
-          ) : activeStage === "Compose" && selection.type === "chapter" ? (
-            <ChapterOverview
-              chapter={chapters.find((c) => c.id === selection.chapterId)!}
-              sections={chapters.find((c) => c.id === selection.chapterId)?.sections ?? []}
-              onAddSection={() => handleAddSection(selection.chapterId)}
-              onSelectSection={(sectionId) => setSelection({ type: "section", chapterId: selection.chapterId, sectionId })}
-            />
           ) : activeStage === "Compose" && isWritableSection ? (
             <ComposePage
               sectionTitle={currentSectionTitle}
@@ -872,9 +932,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
 
                 {/* Prologue */}
-                {/* Prologue */}
                 {hasContent(composeTexts["prologue"] ?? "") && (
-                  <div className="mb-10">
+                  <div id="ms-prologue" className="mb-10">
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Prologue</h3>
                     <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["prologue"] ?? "") }} />
                   </div>
@@ -885,10 +944,10 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   const sectionsWithContent = ch.sections.filter((sec) => hasContent(composeTexts[sec.id] ?? ""));
                   if (sectionsWithContent.length === 0) return null;
                   return (
-                    <div key={ch.id} className="mb-10">
+                    <div key={ch.id} id={`ms-ch-${ch.id}`} className="mb-10">
                       <h3 className="text-[16px] font-semibold mb-5 pt-6" style={{ color: "var(--text-primary)", borderTop: "1px solid var(--border-default)" }}>{ch.title}</h3>
                       {sectionsWithContent.map((sec) => (
-                        <div key={sec.id} className="mb-6">
+                        <div key={sec.id} id={`ms-sec-${sec.id}`} className="mb-6">
                           <h4 className="text-[13px] font-medium mb-3" style={{ color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{sec.title}</h4>
                           <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts[sec.id] ?? "") }} />
                         </div>
@@ -899,7 +958,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
                 {/* Epilogue */}
                 {hasContent(composeTexts["epilogue"] ?? "") && (
-                  <div className="mb-10">
+                  <div id="ms-epilogue" className="mb-10">
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Epilogue</h3>
                     <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["epilogue"] ?? "") }} />
                   </div>
