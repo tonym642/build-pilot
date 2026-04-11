@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { useTheme } from "@/components/layout/theme-context";
 
 const NAV_ITEMS = [
   {
@@ -66,6 +67,7 @@ const NAV_ITEMS = [
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { theme } = useTheme();
   const isHome = pathname === "/";
   const activeFilter = searchParams.get("filter") ?? "All";
 
@@ -84,7 +86,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div style={{ padding: "14px 12px 18px" }}>
         <Link href="/" onClick={onNavigate}>
           <img
-            src="/logo-light.png"
+            src={theme === "light" ? "/logo-dark.png" : "/logo-light.png"}
             alt="Build Pilot"
             style={{ height: 52, width: "auto" }}
           />
