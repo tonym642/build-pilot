@@ -1181,7 +1181,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         className="flex shrink-0 items-center gap-4 mobile-px-4"
         style={{ height: 56, background: "var(--surface-1)", borderBottom: "1px solid var(--border-subtle)", padding: "0 24px" }}
       >
-        <button className="flex items-center justify-center" onClick={() => setMobileSidebarOpen((v) => !v)} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Toggle sidebar">
+        {/* Desktop: open main app sidebar */}
+        <button className="mobile-hidden flex items-center justify-center" onClick={openMainSidebar} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Open navigation">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 4h12M2 8h12M2 12h12" /></svg>
+        </button>
+        {/* Mobile: open project sidebar */}
+        <button className="desktop-hidden flex items-center justify-center" onClick={() => setMobileSidebarOpen((v) => !v)} style={{ width: 28, height: 28, borderRadius: 6, background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }} aria-label="Toggle sidebar">
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M2 4h12M2 8h12M2 12h12" /></svg>
         </button>
         <span className="text-[20px] mobile-text-15 font-bold" style={{ color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
