@@ -508,7 +508,7 @@ function ComposePage({
   return (
     <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
       <div className="flex flex-col min-h-0" style={{ width: aiPanelOpen ? `${dividerX}%` : "100%" }}>
-        <div className="flex-1 min-h-0 px-6 pb-6 mobile-px-4">
+        <div className="flex-1 min-h-0 p-6 mobile-px-4">
           <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" />
         </div>
       </div>
@@ -538,7 +538,7 @@ function ComposePage({
         </div>
       )}
       {aiPanelOpen && (
-        <div className="min-h-0 flex flex-col pr-6 pb-6 mobile-px-4" style={{ width: `${100 - dividerX}%` }}>
+        <div className="min-h-0 flex flex-col pr-6 pt-6 pb-6 mobile-px-4" style={{ width: `${100 - dividerX}%` }}>
           <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
             <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={sectionTitle} onAddMessage={onAddAiMessage} />
           </div>
@@ -1376,7 +1376,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           {/* Book sub-navigation */}
           {topTab === "Book" && (
-            <div className="flex shrink-0 gap-1 px-8 mobile-px-4" style={{ overflowX: "auto", paddingTop: 16, paddingBottom: 16 }}>
+            <div className="flex shrink-0 gap-1 px-8 mobile-px-4 mx-6" style={{ overflowX: "auto", paddingTop: 12, paddingBottom: 12, borderBottom: "1px solid var(--border-default)" }}>
               {STAGES.map((stage) => (
                 <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
               ))}
@@ -1384,7 +1384,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           )}
           {/* ─── Workspace Tab ─── */}
           {topTab === "Workspace" && workspace.mainContent}
-          {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden">
+          {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden pt-6">
           {/* ─── COMPOSE ─── */}
           {activeStage === "Compose" && selection.type === "book_info" ? (
             <BookInfoPanel
