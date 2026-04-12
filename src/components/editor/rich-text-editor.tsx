@@ -1,6 +1,7 @@
 "use client";
 
-import { useEditor, EditorContent, Editor } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor } from "@tiptap/react";
+export type { Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import { TextStyle } from "@tiptap/extension-text-style";
@@ -34,7 +35,7 @@ const COLORS = [
   { label: "Pink", value: "#ec4899" },
 ];
 
-function ToolbarButton({
+export function ToolbarButton({
   active,
   onClick,
   title,
@@ -71,7 +72,7 @@ function ToolbarButton({
   );
 }
 
-function ColorPicker({ editor }: { editor: Editor }) {
+export function ColorPicker({ editor }: { editor: Editor }) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -139,6 +140,10 @@ export function RichTextEditor({
   titleValue,
   onTitleChange,
   onEditorReady,
+  contextLabel,
+  borderless,
+  hideToolbar,
+  onEditor,
 }: {
   content: string;
   onChange: (html: string) => void;
@@ -148,6 +153,14 @@ export function RichTextEditor({
   onTitleChange?: (title: string) => void;
   /** Called once with a getter function that returns the current plain-text selection. */
   onEditorReady?: (getSelection: () => string) => void;
+  /** Small label shown in the toolbar (e.g. "Section Content", "Section Notes") */
+  contextLabel?: string;
+  /** When true, removes outer border/radius/bg — use when the editor is already inside a container. */
+  borderless?: boolean;
+  /** When true, hides the built-in toolbar so the parent can render its own. */
+  hideToolbar?: boolean;
+  /** Called with the editor instance once it's ready, so the parent can render external toolbar buttons. */
+  onEditor?: (editor: Editor) => void;
 }) {
   const editor = useEditor({
     extensions: [
@@ -212,17 +225,22 @@ export function RichTextEditor({
     });
   }, [editor, onEditorReady]);
 
+  // Expose editor instance to parent
+  useEffect(() => {
+    if (editor && onEditor) onEditor(editor);
+  }, [editor, onEditor]);
+
   if (!editor) return null;
 
   return (
-    <div className="flex h-full flex-col rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] transition-colors focus-within:border-[rgba(90,154,245,0.35)]">
+    <div className={`flex h-full flex-col transition-colors ${borderless ? "" : "rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] focus-within:border-[rgba(90,154,245,0.35)]"}`}>
       {/* Toolbar */}
-      <div
+      {!hideToolbar && <div
         className="shrink-0 flex items-center border-b border-[var(--border-default)] px-3"
         style={{ height: 46 }}
       >
         <span className="text-[12px] font-medium pl-1 shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>
-          Composer
+          {contextLabel || "Composer"}
         </span>
         <div className="flex items-center gap-0.5">
         <ToolbarButton
@@ -265,7 +283,7 @@ export function RichTextEditor({
           </svg>
         </ToolbarButton>
         </div>
-      </div>
+      </div>}
 
       {/* Section title + Editor content */}
       <div className="flex-1 min-h-0 overflow-y-auto">

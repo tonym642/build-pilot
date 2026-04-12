@@ -18,6 +18,7 @@
   --surface-1: #1a1d24;
   --surface-2: #1f2229;
   --surface-3: #252830;
+  --surface-notes: #1F1A12;
 
   /* Borders */
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -48,6 +49,7 @@
   --surface-1: #f8f9fb;
   --surface-2: #ffffff;
   --surface-3: #f0f1f4;
+  --surface-notes: #FFF8E8;
 
   --border-subtle: rgba(0, 0, 0, 0.08);
   --border-default: rgba(0, 0, 0, 0.12);
@@ -144,6 +146,12 @@ body {
 }
 .tiptap p {
   margin-bottom: 0.75em;
+}
+.notepad-tight .tiptap {
+  line-height: 1.5;
+}
+.notepad-tight .tiptap p {
+  margin-bottom: 0.35em;
 }
 .tiptap p:last-child {
   margin-bottom: 0;

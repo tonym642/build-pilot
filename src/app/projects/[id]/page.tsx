@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppMode from "./app-mode";
 import { useWorkspace, EMPTY_WORKSPACE, type WorkspaceData } from "./workspace";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
-import { RichTextEditor } from "@/components/editor/rich-text-editor";
+import { RichTextEditor, ToolbarButton, ColorPicker, type Editor } from "@/components/editor/rich-text-editor";
 import { ThemeToggle } from "@/components/layout/theme-context";
 import { useModes, type ModeKey } from "@/components/layout/modes-context";
 import {
@@ -405,13 +405,21 @@ function AiActionBar({
 function AiPanel({
   messages, onUpdateMessage, projectId, bookTitle, chapter, onAddMessage,
   mode, stage, projectContext, workContext, getSelectedText,
+  hideHeader, activeFilter: externalFilter, onFilterChange,
 }: {
   messages: AiMessage[]; onUpdateMessage: (updated: AiMessage) => void; projectId: string; bookTitle: string; chapter: string; onAddMessage: (message: AiMessage) => void;
   mode?: string; stage?: string; projectContext?: ProjectContext; workContext?: AiWorkContext; getSelectedText?: () => string;
+  /** When true, hides the internal header row (tabs managed externally). */
+  hideHeader?: boolean;
+  /** Externally controlled filter — use with hideHeader. */
+  activeFilter?: AiFilter;
+  /** Called when internal filter changes — use with hideHeader. */
+  onFilterChange?: (filter: AiFilter) => void;
 }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<AiFilter>("brainstorm");
+  const [internalFilter, setInternalFilter] = useState<AiFilter>("brainstorm");
+  const activeFilter = externalFilter ?? internalFilter;
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -470,16 +478,23 @@ function AiPanel({
 
   const filtered = filterMessages(messages, activeFilter);
 
+  function setActiveFilter(f: AiFilter) {
+    setInternalFilter(f);
+    if (onFilterChange) onFilterChange(f);
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 flex items-center px-4 pt-3 pb-2 border-b border-[var(--border-default)]" style={{ height: 46 }}>
-        <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
-        <div className="flex items-center gap-1" style={{ overflowX: "auto" }}>
-          {AI_FILTERS.map((f) => (
-            <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
-          ))}
+      {!hideHeader && (
+        <div className="shrink-0 flex items-center px-4 pt-3 pb-2 border-b border-[var(--border-default)]" style={{ height: 46 }}>
+          <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
+          <div className="flex items-center gap-1" style={{ overflowX: "auto" }}>
+            {AI_FILTERS.map((f) => (
+              <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
         <div className="flex flex-col gap-5 pb-4">
           {filtered.map((msg) => (
@@ -577,6 +592,8 @@ function AiPanel({
 
 /* ─── Compose Page (split layout) — only for sections ───────── */
 
+type RightPanelTab = "ai" | "notes";
+
 function ComposePage({
   sectionTitle, chapterId, composeText, onComposeChange, aiMessages, onUpdateAiMessage, onAddAiMessage, projectId, bookTitle,
   mode, stage, projectCtx, workCtx,
@@ -584,11 +601,58 @@ function ComposePage({
   sectionTitle: string; chapterId?: string; composeText: string; onComposeChange: (text: string) => void; aiMessages: AiMessage[]; onUpdateAiMessage: (updated: AiMessage) => void; onAddAiMessage: (message: AiMessage) => void; projectId: string; bookTitle: string;
   mode?: string; stage?: string; projectCtx?: ProjectContext; workCtx?: AiWorkContext;
 }) {
-  const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<RightPanelTab>("ai");
+  const [aiFilter, setAiFilter] = useState<AiFilter>("brainstorm");
   const [dividerX, setDividerX] = useState(50);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const getSelectionRef = useRef<() => string>(() => "");
+  const [notepadEditor, setNotepadEditor] = useState<Editor | null>(null);
+
+  // ─── Single note per section ───
+  const [notesContent, setNotesContent] = useState("");
+  const [notesLoaded, setNotesLoaded] = useState(false);
+  const notesSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notesSkipSave = useRef(true);
+  const sectionIdForNotes = chapterId || sectionTitle;
+  const sectionIdRef = useRef(sectionIdForNotes);
+  sectionIdRef.current = sectionIdForNotes;
+
+  // Load note when section changes
+  useEffect(() => {
+    // Cancel any pending save from previous section
+    if (notesSaveRef.current) { clearTimeout(notesSaveRef.current); notesSaveRef.current = null; }
+    notesSkipSave.current = true;
+    setNotesLoaded(false);
+    if (!projectId || !sectionIdForNotes) return;
+    fetch(`/api/projects/${projectId}/notes?section_id=${encodeURIComponent(sectionIdForNotes)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const content = Array.isArray(data) ? (data[0]?.content ?? "") : (data?.content ?? "");
+        setNotesContent(content);
+        setNotesLoaded(true);
+        // Skip the first save triggered by setNotesContent
+        requestAnimationFrame(() => { notesSkipSave.current = false; });
+      })
+      .catch(() => { setNotesContent(""); setNotesLoaded(true); requestAnimationFrame(() => { notesSkipSave.current = false; }); });
+  }, [projectId, sectionIdForNotes]);
+
+  // Autosave note (debounced)
+  useEffect(() => {
+    if (!notesLoaded || notesSkipSave.current) return;
+    if (notesSaveRef.current) clearTimeout(notesSaveRef.current);
+    const sid = sectionIdRef.current;
+    const content = notesContent;
+    notesSaveRef.current = setTimeout(() => {
+      fetch(`/api/projects/${projectId}/notes`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ section_id: sid, content }),
+      });
+    }, 800);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notesContent]);
 
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -603,42 +667,94 @@ function ComposePage({
     document.addEventListener("mouseup", handleMouseUp);
   }
 
+  const isNotes = rightTab === "notes";
+
+  function tabStyle(active: boolean): React.CSSProperties {
+    return active
+      ? { border: "1px solid var(--border-subtle)", borderBottom: "2px solid var(--accent-blue)", borderRadius: "6px 6px 0 0", background: "var(--overlay-hover)", marginBottom: -1 }
+      : { border: "1px solid transparent", borderBottom: "2px solid transparent", borderRadius: "6px 6px 0 0", marginBottom: -1 };
+  }
+
   return (
     <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
-      <div className="flex flex-col min-h-0" style={{ width: aiPanelOpen ? `${dividerX}%` : "100%" }}>
+      {/* Left: Composer */}
+      <div className="flex flex-col min-h-0" style={{ width: rightPanelOpen ? `${dividerX}%` : "100%", cursor: "default" }}>
         <div className="flex-1 min-h-0 p-6 mobile-px-4">
-          <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} />
+          <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} contextLabel="Section Content" />
         </div>
       </div>
-      {/* Mobile AI toggle */}
+      {/* Mobile toggle */}
       <button
         className="desktop-hidden shrink-0 flex items-center justify-center gap-2 py-2 transition-colors"
-        onClick={() => setAiPanelOpen((v) => !v)}
+        onClick={() => setRightPanelOpen((v) => !v)}
         style={{ borderTop: "1px solid var(--border-subtle)", borderBottom: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--text-faint)" }}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{aiPanelOpen ? "Hide AI Assistant" : "Show AI Assistant"}</span>
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={aiPanelOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
+        <span className="text-[12px] font-medium" style={{ color: "var(--text-muted)" }}>{rightPanelOpen ? "Hide Panel" : "Show Panel"}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" style={{ color: "var(--text-faint)" }}><polyline points={rightPanelOpen ? "1,3 5,7 9,3" : "1,7 5,3 9,7"} /></svg>
       </button>
       {/* Divider — desktop only */}
-      {aiPanelOpen && (
+      {rightPanelOpen && (
         <div className="shrink-0 flex items-center justify-center mobile-hidden" style={{ width: 16, cursor: "col-resize", position: "relative", zIndex: 10 }} onMouseDown={handleMouseDown}>
-          <button onClick={() => setAiPanelOpen(false)} title="Close AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, zIndex: 11 }}>
+          <button onClick={() => setRightPanelOpen(false)} title="Close panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="3,1 7,5 3,9" /></svg>
           </button>
         </div>
       )}
-      {!aiPanelOpen && (
+      {!rightPanelOpen && (
         <div className="shrink-0 flex items-center mobile-hidden" style={{ position: "relative", width: 16 }}>
-          <button onClick={() => setAiPanelOpen(true)} title="Open AI panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, right: -11, zIndex: 11 }}>
+          <button onClick={() => setRightPanelOpen(true)} title="Open panel" className="absolute flex items-center justify-center rounded-full border border-[var(--border-default)] bg-[var(--surface-2)] transition-colors hover:bg-[var(--surface-3)]" style={{ width: 22, height: 22, right: -11, zIndex: 11 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><polyline points="7,1 3,5 7,9" /></svg>
           </button>
         </div>
       )}
-      {aiPanelOpen && (
+      {/* Right panel */}
+      {rightPanelOpen && (
         <div className="min-h-0 flex flex-col pr-6 pt-6 pb-6 mobile-px-4" style={{ width: `${100 - dividerX}%` }}>
-          <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={chapterId || sectionTitle} onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} getSelectedText={getSelectionRef.current} />
+          <div
+            className="flex-1 min-h-0 flex flex-col rounded-md border border-[var(--border-default)] overflow-hidden"
+            style={{
+              minHeight: 300,
+              background: isNotes ? "var(--surface-notes)" : "var(--overlay-card)",
+              transition: "background 0.2s ease",
+              cursor: "default",
+            }}
+          >
+            {/* ── Menu row: tabs left, AI filters right ── */}
+            <div className="shrink-0 flex items-end px-3" style={{ paddingTop: 8, borderBottom: "1px solid var(--border-default)" }}>
+              <button onClick={() => setRightTab("ai")} className={`px-3 py-1.5 text-[13px] transition-colors ${rightTab === "ai" ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:text-[var(--text-tertiary)]"}`} style={tabStyle(rightTab === "ai")}>AI Assistant</button>
+              <button onClick={() => setRightTab("notes")} className={`px-3 py-1.5 text-[13px] transition-colors ${rightTab === "notes" ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:text-[var(--text-tertiary)]"}`} style={tabStyle(rightTab === "notes")}>Notepad</button>
+              <div style={{ flex: 1 }} />
+              {!isNotes && (
+                <div className="flex items-center gap-1 pb-1.5">
+                  {AI_FILTERS.map((f) => (
+                    <button key={f.key} onClick={() => setAiFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${aiFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
+                  ))}
+                </div>
+              )}
+              {isNotes && notepadEditor && (
+                <div className="flex items-center gap-0.5 pb-1.5">
+                  <ToolbarButton active={notepadEditor.isActive("bold")} onClick={() => notepadEditor.chain().focus().toggleBold().run()} title="Bold (Ctrl+B)"><span style={{ fontWeight: 700, fontSize: 13 }}>B</span></ToolbarButton>
+                  <ToolbarButton active={notepadEditor.isActive("italic")} onClick={() => notepadEditor.chain().focus().toggleItalic().run()} title="Italic (Ctrl+I)"><span style={{ fontWeight: 500, fontSize: 13, fontStyle: "italic" }}>I</span></ToolbarButton>
+                  <ToolbarButton active={notepadEditor.isActive("underline")} onClick={() => notepadEditor.chain().focus().toggleUnderline().run()} title="Underline (Ctrl+U)"><span style={{ fontWeight: 500, fontSize: 13, textDecoration: "underline" }}>U</span></ToolbarButton>
+                  <ColorPicker editor={notepadEditor} />
+                  <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+                  <ToolbarButton onClick={() => notepadEditor.chain().focus().clearNodes().unsetAllMarks().run()} title="Clear formatting">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /><line x1="3" y1="21" x2="21" y2="3" /></svg>
+                  </ToolbarButton>
+                </div>
+              )}
+            </div>
+
+            {/* AI Assistant */}
+            <div className="flex-1 min-h-0" style={{ display: rightTab === "ai" ? "flex" : "none", flexDirection: "column" }}>
+              <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={chapterId || sectionTitle} onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} getSelectedText={getSelectionRef.current} hideHeader activeFilter={aiFilter} onFilterChange={setAiFilter} />
+            </div>
+
+            {/* Notes — single writing pad with same editor as Composer */}
+            <div className="flex-1 min-h-0 notepad-tight" style={{ display: rightTab === "notes" ? "flex" : "none", flexDirection: "column" }}>
+              <RichTextEditor content={notesContent} onChange={setNotesContent} placeholder="Capture ideas, references, or thoughts for this section…" borderless hideToolbar onEditor={setNotepadEditor} />
+            </div>
           </div>
         </div>
       )}
@@ -1384,7 +1500,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
         {/* Left sidebar */}
         {(topTab === "Workspace" || topTab === "Book") && (
-        <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
+        <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined, cursor: "default" }}>
           {/* Book | Workspace tabs (hidden on Publish) */}
           {!(topTab === "Book" && activeStage === "Publish") && (
           <div className="flex items-end gap-1 px-4 pt-4 pb-0 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
