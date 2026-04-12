@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 export type ModeKey = "Book" | "App" | "Business" | "Music";
 
@@ -14,8 +14,6 @@ export const MODE_LABELS: Record<ModeKey, string> = {
 
 /** All mode keys in display order */
 export const ALL_MODES: ModeKey[] = ["Book", "App", "Music", "Business"];
-
-const STORAGE_KEY = "build-pilot-modes";
 
 const DEFAULTS: Record<ModeKey, boolean> = {
   Book: true,
@@ -44,26 +42,46 @@ export function useModes() {
 
 export function ModesProvider({ children }: { children: React.ReactNode }) {
   const [modes, setModes] = useState<Record<ModeKey, boolean>>(DEFAULTS);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load from Supabase on mount
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setModes((prev) => ({ ...prev, ...parsed }));
+    (async () => {
+      try {
+        const res = await fetch("/api/mode-preferences");
+        if (!res.ok) return;
+        const row = await res.json();
+        if (row.modes && typeof row.modes === "object") {
+          setModes((prev) => ({ ...prev, ...row.modes }));
+        }
+      } catch {
+        // ignore — use defaults
       }
-    } catch {
-      // ignore
-    }
+    })();
+  }, []);
+
+  const persistToSupabase = useCallback((next: Record<ModeKey, boolean>) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await fetch("/api/mode-preferences", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ modes: next }),
+        });
+      } catch {
+        // ignore
+      }
+    }, 500);
   }, []);
 
   const setModeEnabled = useCallback((mode: ModeKey, enabled: boolean) => {
     setModes((prev) => {
       const next = { ...prev, [mode]: enabled };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      persistToSupabase(next);
       return next;
     });
-  }, []);
+  }, [persistToSupabase]);
 
   const isModeEnabled = useCallback((mode: ModeKey) => modes[mode] ?? false, [modes]);
 

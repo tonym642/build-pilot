@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useModes, ALL_MODES, MODE_LABELS, type ModeKey } from "@/components/layout/modes-context";
-import { saveGlobalInstruction } from "@/lib/ai-engine";
 
 /* ─── Types & defaults ─────────────────────────────────────────── */
 
@@ -50,8 +49,6 @@ const MODE_COLORS: Record<ModeKey, string> = {
   Business: "#fbbf24",
 };
 
-const STORAGE_KEY = "build-pilot-ai-engine";
-
 /* ─── Page ─────────────────────────────────────────────────────── */
 
 type SelectedPanel = "global" | ModeKey;
@@ -66,43 +63,75 @@ export default function AIEnginePage() {
     for (const m of ALL_MODES) empty[m] = { ...EMPTY_INSTRUCTIONS };
     return empty as Record<ModeKey, StageInstructions>;
   });
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load from localStorage
+  // Load from Supabase on mount
   useEffect(() => {
-    try {
-      const savedGlobal = localStorage.getItem("build-pilot-ai-engine-global");
-      if (savedGlobal) setGlobalInstruction(savedGlobal);
-
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setData((prev) => {
-          const merged = { ...prev };
-          for (const key of ALL_MODES) {
-            if (parsed[key]) merged[key] = { ...prev[key], ...parsed[key] };
-          }
-          return merged;
-        });
+    (async () => {
+      try {
+        const res = await fetch("/api/ai-engine");
+        if (!res.ok) throw new Error("Failed to load");
+        const row = await res.json();
+        if (row.global_instruction) setGlobalInstruction(row.global_instruction);
+        if (row.mode_instructions && typeof row.mode_instructions === "object") {
+          setData((prev) => {
+            const merged = { ...prev };
+            for (const key of ALL_MODES) {
+              if (row.mode_instructions[key]) {
+                merged[key] = { ...prev[key], ...row.mode_instructions[key] };
+              }
+            }
+            return merged;
+          });
+        }
+      } catch {
+        // ignore — will use defaults
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      // ignore
-    }
+    })();
   }, []);
 
-  const persist = useCallback((next: Record<ModeKey, StageInstructions>) => {
-    setData(next);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  // Debounced save to Supabase
+  const persistToSupabase = useCallback((globalVal: string, modeData: Record<ModeKey, StageInstructions>) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSaveStatus("saving");
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/ai-engine", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            global_instruction: globalVal,
+            mode_instructions: modeData,
+          }),
+        });
+        if (!res.ok) throw new Error("Save failed");
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus("error");
+      }
+    }, 800);
   }, []);
+
+  const updateGlobal = useCallback((value: string) => {
+    setGlobalInstruction(value);
+    persistToSupabase(value, data);
+  }, [data, persistToSupabase]);
 
   const updateInstruction = useCallback(
     (stage: StageKey, value: string) => {
       const mode = selected === "global" ? "Book" : selected as ModeKey;
-      persist({
+      const next = {
         ...data,
         [mode]: { ...data[mode], [stage]: value },
-      });
+      };
+      setData(next);
+      persistToSupabase(globalInstruction, next);
     },
-    [data, selected, persist],
+    [data, selected, globalInstruction, persistToSupabase],
   );
 
   // Reset tab on mode switch
@@ -115,6 +144,20 @@ export default function AIEnginePage() {
   const color = isGlobal ? "#5a9af5" : MODE_COLORS[selectedMode];
   const instructions = data[selectedMode];
   const tabIsActive = activeTab;
+
+  const saveLabel = saveStatus === "saving" ? "Saving..." : saveStatus === "error" ? "Save failed" : "Saved to database";
+  const saveColor = saveStatus === "error" ? "rgba(239,68,68,0.7)" : "var(--text-muted)";
+
+  if (loading) {
+    return (
+      <div
+        className="mobile-px-4 flex flex-col items-center justify-center"
+        style={{ height: "calc(100vh - 48px)", background: "var(--surface-1)" }}
+      >
+        <p className="text-[13px]" style={{ color: "var(--text-muted)" }}>Loading AI Engine settings...</p>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -300,10 +343,7 @@ export default function AIEnginePage() {
               </p>
               <textarea
                 value={globalInstruction}
-                onChange={(e) => {
-                  setGlobalInstruction(e.target.value);
-                  saveGlobalInstruction(e.target.value);
-                }}
+                onChange={(e) => updateGlobal(e.target.value)}
                 placeholder={"Enter global instructions that apply to all AI requests...\n\nExample:\n- Always respond in plain text, no markdown\n- Be concise and direct\n- Speak to the user as a creative collaborator"}
                 style={{
                   flex: 1,
@@ -324,8 +364,8 @@ export default function AIEnginePage() {
                 onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
               />
               <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
-                <p className="text-[10px]" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
-                  Auto-saved to local storage
+                <p className="text-[10px]" style={{ color: saveColor, opacity: 0.5 }}>
+                  {saveLabel}
                 </p>
                 <span className="text-[10px]" style={{ color: "var(--text-muted)", opacity: 0.4 }}>
                   {globalInstruction.length > 0 ? `${globalInstruction.length} chars` : "Empty"}
@@ -422,8 +462,8 @@ export default function AIEnginePage() {
             />
 
             <div className="flex items-center justify-between" style={{ marginTop: 10 }}>
-              <p className="text-[10px]" style={{ color: "var(--text-muted)", opacity: 0.5 }}>
-                Auto-saved to local storage
+              <p className="text-[10px]" style={{ color: saveColor, opacity: 0.5 }}>
+                {saveLabel}
               </p>
               <span
                 className="text-[10px]"

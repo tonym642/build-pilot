@@ -432,8 +432,8 @@ function AiPanel({
         .slice(-10)
         .map((m) => ({ role: m.role === "user" ? "user" as const : "assistant" as const, text: m.text }));
 
-      // Load AI Engine config from localStorage
-      const aiEngine = loadAIEngineConfig();
+      // Load AI Engine config from Supabase
+      const aiEngine = await loadAIEngineConfig();
 
       // Capture editor selection at the moment of submit
       const selectedText = getSelectedText ? getSelectedText() : "";

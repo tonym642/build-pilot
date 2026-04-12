@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import { supabase } from "@/lib/supabase";
 import {
   buildAiMessages,
   flattenMessagesToPrompt,
@@ -44,8 +45,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "OpenAI API key not configured." }, { status: 500 });
   }
 
-  // Build AI Engine config from client payload
-  const aiEngineConfig: AIEngineConfig = body.aiEngine ?? EMPTY_AI_ENGINE_CONFIG;
+  // Build AI Engine config from client payload, or load from Supabase as fallback
+  let aiEngineConfig: AIEngineConfig = EMPTY_AI_ENGINE_CONFIG;
+  if (body.aiEngine) {
+    aiEngineConfig = body.aiEngine;
+  } else {
+    try {
+      const { data: row } = await supabase
+        .from("ai_engine_settings")
+        .select("global_instruction, mode_instructions")
+        .limit(1)
+        .maybeSingle();
+      if (row) {
+        aiEngineConfig = {
+          ...EMPTY_AI_ENGINE_CONFIG,
+          global: row.global_instruction || "",
+          ...(row.mode_instructions && typeof row.mode_instructions === "object"
+            ? Object.fromEntries(
+                (["Book", "App", "Business", "Music"] as ModeKey[])
+                  .filter((k) => row.mode_instructions[k])
+                  .map((k) => [k, { ...EMPTY_AI_ENGINE_CONFIG[k], ...row.mode_instructions[k] }])
+              )
+            : {}),
+        };
+      }
+    } catch {
+      // use defaults
+    }
+  }
   const mode: ModeKey = body.mode ?? "Book";
   const page: StageKey = body.page ?? "compose";
 

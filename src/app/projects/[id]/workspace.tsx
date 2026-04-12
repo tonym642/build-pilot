@@ -206,7 +206,7 @@ function WsAiPanel({
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
     try {
-      const aiEngine = loadAIEngineConfig();
+      const aiEngine = await loadAIEngineConfig();
       const res = await fetch("/api/brainstorm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, chapter: context, bookTitle, project_id: projectId, mode: "Book", page: "compose", aiEngine }) });
       const data = await res.json();
       const aiMsgLocalId = Date.now() + 1;

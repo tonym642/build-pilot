@@ -64,36 +64,29 @@ export const EMPTY_AI_ENGINE_CONFIG: AIEngineConfig = {
   Music: { ...EMPTY_STAGE },
 };
 
-const AI_ENGINE_STORAGE_KEY = "build-pilot-ai-engine";
-const AI_ENGINE_GLOBAL_KEY = "build-pilot-ai-engine-global";
+/* Storage keys kept for reference; data now lives in Supabase. */
 
 /* ─── Storage helpers ──────────────────────────────────────────── */
 
-/** Load the full AI Engine config from localStorage (client-side only). */
-export function loadAIEngineConfig(): AIEngineConfig {
+/** Load the full AI Engine config from Supabase via API. */
+export async function loadAIEngineConfig(): Promise<AIEngineConfig> {
   const config = { ...EMPTY_AI_ENGINE_CONFIG };
   try {
-    const globalVal = localStorage.getItem(AI_ENGINE_GLOBAL_KEY);
-    if (globalVal) config.global = globalVal;
-
-    const modesVal = localStorage.getItem(AI_ENGINE_STORAGE_KEY);
-    if (modesVal) {
-      const parsed = JSON.parse(modesVal);
+    const res = await fetch("/api/ai-engine");
+    if (!res.ok) return config;
+    const row = await res.json();
+    if (row.global_instruction) config.global = row.global_instruction;
+    if (row.mode_instructions && typeof row.mode_instructions === "object") {
       for (const key of ["Book", "App", "Business", "Music"] as ModeKey[]) {
-        if (parsed[key]) {
-          config[key] = { ...EMPTY_STAGE, ...parsed[key] };
+        if (row.mode_instructions[key]) {
+          config[key] = { ...EMPTY_STAGE, ...row.mode_instructions[key] };
         }
       }
     }
   } catch {
-    // ignore
+    // ignore — return defaults
   }
   return config;
-}
-
-/** Save the global instruction to localStorage. */
-export function saveGlobalInstruction(value: string): void {
-  localStorage.setItem(AI_ENGINE_GLOBAL_KEY, value);
 }
 
 /* ─── Instruction stack ────────────────────────────────────────── */

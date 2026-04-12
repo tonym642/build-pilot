@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useModes, ALL_MODES, MODE_LABELS, type ModeKey } from "@/components/layout/modes-context";
 
 /* ─── Types & defaults ─────────────────────────────────────────── */
@@ -75,7 +75,7 @@ const MODE_COLORS: Record<ModeKey, string> = {
   Business: "#fbbf24",
 };
 
-const CONTENT_STORAGE_KEY = "build-pilot-mode-content";
+/* Content is now stored in Supabase via /api/mode-content */
 
 const TABS = ["Overview", "Features", "Use Cases"] as const;
 type Tab = (typeof TABS)[number];
@@ -115,29 +115,44 @@ export default function SettingsPage() {
   const [selected, setSelected] = useState<ModeKey>("Book");
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [allContent, setAllContent] = useState<Record<ModeKey, ModeContent>>(DEFAULT_CONTENT);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load saved content from localStorage
+  // Load saved content from Supabase
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(CONTENT_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setAllContent((prev) => {
-          const merged = { ...prev };
-          for (const key of ALL_MODES) {
-            if (parsed[key]) merged[key] = { ...prev[key], ...parsed[key] };
-          }
-          return merged;
-        });
+    (async () => {
+      try {
+        const res = await fetch("/api/mode-content");
+        if (!res.ok) return;
+        const row = await res.json();
+        if (row.content && typeof row.content === "object") {
+          setAllContent((prev) => {
+            const merged = { ...prev };
+            for (const key of ALL_MODES) {
+              if (row.content[key]) merged[key] = { ...prev[key], ...row.content[key] };
+            }
+            return merged;
+          });
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
-    }
+    })();
   }, []);
 
   const persist = useCallback((next: Record<ModeKey, ModeContent>) => {
     setAllContent(next);
-    localStorage.setItem(CONTENT_STORAGE_KEY, JSON.stringify(next));
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        await fetch("/api/mode-content", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: next }),
+        });
+      } catch {
+        // ignore
+      }
+    }, 800);
   }, []);
 
   const updateMode = useCallback(
