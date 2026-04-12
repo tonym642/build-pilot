@@ -177,3 +177,17 @@ body {
 .tiptap hr {
   display: none;
 }
+
+/* Print styles — hide UI chrome when printing/saving as PDF */
+@media print {
+  .print-hidden {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    color: #1a1a1a !important;
+  }
+  .prose-rendered {
+    color: #1a1a1a !important;
+  }
+}

@@ -1,4 +1,5 @@
 import { ThemeToggle } from "./theme-context";
+import { AvatarMenu } from "./avatar-menu";
 
 export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
   return (
@@ -36,10 +37,7 @@ export function Topbar({ onMenuToggle }: { onMenuToggle?: () => void }) {
 
       <div className="flex items-center gap-3">
         <ThemeToggle />
-        <div
-          className="h-7 w-7 rounded-full"
-          style={{ background: "var(--overlay-active)" }}
-        />
+        <AvatarMenu />
       </div>
     </header>
   );

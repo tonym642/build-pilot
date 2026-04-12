@@ -3,11 +3,13 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { chunkText, ensureChunks, countWords, type LibraryChunk, type AnalysisStatus } from "@/lib/chunking";
+import { loadAIEngineConfig } from "@/lib/ai-engine";
 
 /* ─── Types ────────────────────────────────────────────────── */
 
 type WsAiMessage = {
   id: number;
+  db_id: string | null;
   role: "user" | "ai";
   text: string;
   is_favorite: boolean;
@@ -18,8 +20,8 @@ type WsAiMessage = {
   created_at: Date;
 };
 
-function newWsMsg(id: number, role: "user" | "ai", text: string): WsAiMessage {
-  return { id, role, text, is_favorite: false, is_liked: false, is_disliked: false, is_hidden: false, is_deleted: false, created_at: new Date() };
+function newWsMsg(id: number, role: "user" | "ai", text: string, db_id?: string | null): WsAiMessage {
+  return { id, role, text, db_id: db_id ?? null, is_favorite: false, is_liked: false, is_disliked: false, is_hidden: false, is_deleted: false, created_at: new Date() };
 }
 
 type WsFilter = "brainstorm" | "favorites" | "liked" | "hidden" | "trash";
@@ -191,19 +193,27 @@ function WsAiPanel({
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<WsFilter>("brainstorm");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   async function handleSubmit() {
     if (!input.trim() || loading) return;
     const trimmed = input.trim();
-    onAddMessage(newWsMsg(Date.now(), "user", trimmed));
+    const userMsgLocalId = Date.now();
+    onAddMessage(newWsMsg(userMsgLocalId, "user", trimmed));
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
     try {
-      const res = await fetch("/api/brainstorm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, chapter: context, bookTitle, project_id: projectId }) });
+      const aiEngine = loadAIEngineConfig();
+      const res = await fetch("/api/brainstorm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, chapter: context, bookTitle, project_id: projectId, mode: "Book", page: "compose", aiEngine }) });
       const data = await res.json();
-      onAddMessage(newWsMsg(Date.now() + 1, "ai", res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again."));
+      const aiMsgLocalId = Date.now() + 1;
+      onAddMessage(newWsMsg(aiMsgLocalId, "ai", res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again.", data.aiMsgId));
+      if (data.userMsgId) {
+        onUpdateMessage({ ...newWsMsg(userMsgLocalId, "user", trimmed, data.userMsgId) });
+      }
     } catch { onAddMessage(newWsMsg(Date.now() + 1, "ai", "I couldn't generate a response right now. Please try again.")); }
     finally { setLoading(false); }
   }
@@ -225,20 +235,38 @@ function WsAiPanel({
           {filtered.map((msg) => (
             <div key={msg.id}>
               {msg.role === "user" ? (
-                <div className="flex justify-end"><p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p></div>
+                <div className="flex justify-end items-start gap-1.5 group/user">
+                  <button onClick={() => onUpdateMessage({ ...msg, is_hidden: true })} title="Hide message" className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }} onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                  </button>
+                  <button onClick={() => onUpdateMessage({ ...msg, is_deleted: true })} title="Delete message" className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center" style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }} onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")} onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                  </button>
+                  <p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
+                </div>
               ) : (
                 <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><WsActionBar message={msg} onUpdate={onUpdateMessage} /></div>
               )}
             </div>
           ))}
-          {filtered.length === 0 && <p className="text-[12px] text-[var(--text-faint)] text-center py-8">{activeFilter === "brainstorm" ? "Start a conversation with your AI assistant." : `No ${activeFilter} messages.`}</p>}
+          {filtered.length === 0 && !loading && <p className="text-[12px] text-[var(--text-faint)] text-center py-8">{activeFilter === "brainstorm" ? "Start a conversation with your AI assistant." : `No ${activeFilter} messages.`}</p>}
+          {loading && (
+            <div className="flex items-center gap-2 py-2">
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
+              </div>
+              <span className="text-[12px] text-[var(--text-faint)]">AI is thinking...</span>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
       <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
-        <div className="flex items-center gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}>
-          <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1 }}>+</span>
-          <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }} placeholder="Add an idea, ask a question, or give direction..." className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)]" style={{ padding: "5px 0", fontFamily: "inherit" }} />
+        <div className="flex items-end gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]" style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}>
+          <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1, paddingBottom: 6 }}>+</span>
+          <textarea ref={textareaRef} value={input} onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }} placeholder="Add an idea, ask a question, or give direction..." rows={1} className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)] resize-none" style={{ padding: "5px 0", fontFamily: "inherit", maxHeight: 120, overflowY: "auto", lineHeight: "1.5" }} />
           {loading ? (
             <div className="flex items-center justify-center" style={{ width: 24, height: 24, flexShrink: 0 }}>
               <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--border-default)] border-t-[var(--text-tertiary)]" />
@@ -1064,6 +1092,21 @@ export function useWorkspace({
 
   function updateAiMsg(key: string, updated: WsAiMessage) {
     setWsAiMessages((prev) => ({ ...prev, [key]: (prev[key] ?? []).map((m) => m.id === updated.id ? updated : m) }));
+    // Persist flag changes to database
+    if (updated.db_id && projectId) {
+      fetch(`/api/projects/${projectId}/messages`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId: updated.db_id,
+          is_favorite: updated.is_favorite,
+          is_liked: updated.is_liked,
+          is_disliked: updated.is_disliked,
+          is_hidden: updated.is_hidden,
+          is_deleted: updated.is_deleted,
+        }),
+      }).catch((err) => console.error("Failed to persist message flags:", err));
+    }
   }
 
   /* ─── Current items ─────────────────────────────────────── */

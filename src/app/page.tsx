@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useModes, type ModeKey } from "@/components/layout/modes-context";
 
 const TYPE_OPTIONS = ["Book", "App", "Business", "Music"] as const;
 
@@ -69,6 +70,7 @@ export default function HomePage() {
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { enabledModes } = useModes();
   const activeFilter = searchParams.get("filter") ?? "All";
 
   const [projects, setProjects] = useState<Project[]>([]);
@@ -424,7 +426,7 @@ function HomePageContent() {
                 backgroundPosition: "right 10px center",
               }}
             >
-              {TYPE_OPTIONS.map((t) => (
+              {enabledModes.map((t) => (
                 <option key={t} value={t} style={{ background: "var(--surface-2)" }}>
                   {t}
                 </option>

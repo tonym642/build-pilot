@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
+import { useModes } from "@/components/layout/modes-context";
 
 /* ─── types ──────────────────────────────────────────────────────── */
 
@@ -759,6 +760,7 @@ export default function AppMode({
   projectName: string;
 }) {
   const { openMainSidebar } = useMainSidebar();
+  const { enabledModes } = useModes();
   const [appData, setAppData] = useState<AppData>(EMPTY_APP_DATA);
   const [view, setView] = useState<ViewState>({ page: "App Info" });
   const [displayName, setDisplayName] = useState(projectName);
@@ -1247,7 +1249,7 @@ export default function AppMode({
                   backgroundPosition: "right 10px center",
                 }}
               >
-                {(["Book", "App", "Business", "Music"] as const).map((t) => (
+                {enabledModes.map((t) => (
                   <option key={t} value={t} style={{ background: "var(--surface-2)" }}>{t}</option>
                 ))}
               </select>

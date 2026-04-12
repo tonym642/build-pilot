@@ -8,6 +8,21 @@ import Color from "@tiptap/extension-color";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useState, useEffect, useRef } from "react";
 
+/**
+ * Strip unwanted inline styles and wrapper spans from HTML.
+ * Keeps only clean structural tags: p, strong, em, u, br.
+ */
+function sanitizeHtml(html: string): string {
+  if (!html) return html;
+  return html
+    // Remove <span style="...">...</span> — unwrap content, keep inner text
+    .replace(/<span\s+style="[^"]*">([\s\S]*?)<\/span>/gi, "$1")
+    // Remove any remaining empty spans
+    .replace(/<span\s*>([\s\S]*?)<\/span>/gi, "$1")
+    // Remove style attributes from any remaining tags
+    .replace(/\s+style="[^"]*"/gi, "");
+}
+
 const COLORS = [
   { label: "Default", value: "" },
   { label: "Red", value: "#ef4444" },
@@ -123,6 +138,7 @@ export function RichTextEditor({
   label,
   titleValue,
   onTitleChange,
+  onEditorReady,
 }: {
   content: string;
   onChange: (html: string) => void;
@@ -130,6 +146,8 @@ export function RichTextEditor({
   label?: string;
   titleValue?: string;
   onTitleChange?: (title: string) => void;
+  /** Called once with a getter function that returns the current plain-text selection. */
+  onEditorReady?: (getSelection: () => string) => void;
 }) {
   const editor = useEditor({
     extensions: [
@@ -158,7 +176,7 @@ export function RichTextEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      onChange(ed.getHTML());
+      onChange(sanitizeHtml(ed.getHTML()));
     },
   });
 
@@ -166,10 +184,11 @@ export function RichTextEditor({
   const lastExternalContent = useRef(content);
   useEffect(() => {
     if (!editor) return;
-    if (content !== lastExternalContent.current) {
-      lastExternalContent.current = content;
-      if (editor.getHTML() !== content) {
-        editor.commands.setContent(content || "", { emitUpdate: false });
+    const clean = sanitizeHtml(content);
+    if (clean !== lastExternalContent.current) {
+      lastExternalContent.current = clean;
+      if (sanitizeHtml(editor.getHTML()) !== clean) {
+        editor.commands.setContent(clean || "", { emitUpdate: false });
       }
     }
   }, [content, editor]);
@@ -182,6 +201,16 @@ export function RichTextEditor({
     editor.on("update", handler);
     return () => { editor.off("update", handler); };
   }, [editor]);
+
+  // Expose selection getter to parent
+  useEffect(() => {
+    if (!editor || !onEditorReady) return;
+    onEditorReady(() => {
+      const { from, to } = editor.state.selection;
+      if (from === to) return "";
+      return editor.state.doc.textBetween(from, to, "\n");
+    });
+  }, [editor, onEditorReady]);
 
   if (!editor) return null;
 

@@ -1,7 +1,32 @@
 "use client";
 
+/**
+ * ─── SOURCE OF TRUTH: Final Edit (Publish) Page ───────────────────
+ *
+ * WORKFLOW:
+ *   Compose  → drafting/editing source         → writes to `draft_blocks` table
+ *   Manuscript → compiled preview (read-only)  → reads from `draft_blocks` via composeTexts
+ *   Publish  → final proofing/finalized version → reads/writes `book_version_sections` table
+ *
+ * DATA FLOW:
+ *   "Send to Publish" snapshots composeTexts → creates `book_versions` + `book_version_sections`
+ *   Each version is an independent frozen copy. Edits here do NOT affect Compose or Manuscript.
+ *
+ * PERSISTENCE:
+ *   - Section content edits   → PATCH /api/projects/{id}/versions/{versionId} → book_version_sections.content
+ *   - Review status           → PATCH → book_version_sections.is_reviewed, reviewed_at
+ *   - Finalize status         → PATCH → book_version_sections.is_finalized, finalized_at
+ *   - AI suggestion accept    → PATCH → book_version_sections.content (with undo snapshot)
+ *
+ * MANUSCRIPT RELATION:
+ *   Manuscript = pre-publish compiled content ONLY (reads from composeTexts/draft_blocks).
+ *   It does NOT reflect finalized publish content. Publish is a one-way snapshot.
+ */
+
 import { useState, useRef, useEffect, useCallback, use } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { RichTextEditor } from "@/components/editor/rich-text-editor";
 
 type Section = {
   id: string;
@@ -32,6 +57,7 @@ type Suggestion = {
 type SuggestionState = Suggestion & {
   status: "pending" | "accepted" | "edited" | "skipped";
   editedText: string | null;
+  previousContent: string | null;
 };
 
 type ReviewState = "not_started" | "in_progress" | "loaded" | "complete";
@@ -44,6 +70,7 @@ export default function FinalEditPage({
   params: Promise<{ id: string; versionId: string }>;
 }) {
   const { id: projectId, versionId } = use(params);
+  const router = useRouter();
   const [version, setVersion] = useState<Version | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
@@ -58,7 +85,10 @@ export default function FinalEditPage({
   // Finalize confirmation modal
   const [finalizeModal, setFinalizeModal] = useState<FinalizeModal>(null);
 
-  const backRoute = `/projects/${projectId}?stage=Book`;
+  // Sidebar chapter expand/collapse
+  const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+
+  const backRoute = `/projects/${projectId}?stage=Publish`;
 
   // Load version and sections
   useEffect(() => {
@@ -107,8 +137,9 @@ export default function FinalEditPage({
 
   console.log("review state:", reviewState, "total suggestions:", totalSuggestions, "handled suggestions:", handledCount);
 
-  // Section navigation — resets suggestions for new section
+  // Section navigation — flush pending saves, then reset suggestions for new section
   function goToSection(sectionId: string) {
+    flushPendingSaves();
     setActiveSectionId(sectionId);
     setSuggestions([]);
     setEditingIndex(null);
@@ -116,7 +147,7 @@ export default function FinalEditPage({
     // Determine review state from persisted is_reviewed
     const section = sections.find((s) => s.id === sectionId);
     setReviewState(section?.is_reviewed ? "loaded" : "not_started");
-    console.log("active section id:", sectionId, "section index:", sections.findIndex((s) => s.id === sectionId));
+    console.log("[Publish Nav] section:", sectionId, "index:", sections.findIndex((s) => s.id === sectionId));
   }
 
   function goPrev() {
@@ -127,30 +158,52 @@ export default function FinalEditPage({
     if (activeIndex < sections.length - 1) goToSection(sections[activeIndex + 1].id);
   }
 
-  // Debounced save
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounced save — per-section timers to avoid cross-section cancellation
+  const saveTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const pendingSavesRef = useRef<Record<string, Record<string, unknown>>>({});
 
   const patchSection = useCallback(
     (sectionId: string, payload: Record<string, unknown>) => {
-      console.log("section save payload:", { section_id: sectionId, ...payload });
+      // Source: book_version_sections table via PATCH /api/projects/{id}/versions/{versionId}
+      console.log("[Publish Save] section_id:", sectionId, "payload:", payload);
+      delete pendingSavesRef.current[sectionId];
       fetch(`/api/projects/${projectId}/versions/${versionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ section_id: sectionId, ...payload }),
       }).then((res) => {
-        if (!res.ok) console.error("section save error:", res.status);
+        if (!res.ok) console.error("[Publish Save] error:", res.status);
+        else console.log("[Publish Save] saved successfully:", sectionId);
       });
     },
     [projectId, versionId]
   );
+
+  // Flush any pending saves (called before navigation or section switch)
+  const flushPendingSaves = useCallback(() => {
+    for (const [sectionId, payload] of Object.entries(pendingSavesRef.current)) {
+      if (saveTimersRef.current[sectionId]) {
+        clearTimeout(saveTimersRef.current[sectionId]);
+        delete saveTimersRef.current[sectionId];
+      }
+      patchSection(sectionId, payload);
+    }
+  }, [patchSection]);
+
+  // Flush on unmount (e.g. navigating away)
+  useEffect(() => {
+    return () => { flushPendingSaves(); };
+  }, [flushPendingSaves]);
 
   const handleSectionContentChange = useCallback(
     (sectionId: string, content: string) => {
       setSections((prev) =>
         prev.map((s) => (s.id === sectionId ? { ...s, content } : s))
       );
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => patchSection(sectionId, { content }), 800);
+      // Track pending save and debounce per-section
+      pendingSavesRef.current[sectionId] = { content };
+      if (saveTimersRef.current[sectionId]) clearTimeout(saveTimersRef.current[sectionId]);
+      saveTimersRef.current[sectionId] = setTimeout(() => patchSection(sectionId, { content }), 800);
     },
     [patchSection]
   );
@@ -186,6 +239,7 @@ export default function FinalEditPage({
             ...s,
             status: "pending" as const,
             editedText: null,
+            previousContent: null,
           }))
         );
         setReviewState(data.suggestions.length === 0 ? "complete" : "loaded");
@@ -294,6 +348,9 @@ export default function FinalEditPage({
       status: newStatus,
     });
 
+    // Capture current content before replacing so we can undo
+    const currentContent = sections.find((s) => s.id === activeSectionId)?.content ?? "";
+
     setSections((prev) =>
       prev.map((s) => {
         if (s.id !== activeSectionId) return s;
@@ -305,10 +362,33 @@ export default function FinalEditPage({
 
     setSuggestions((prev) =>
       prev.map((s, i) =>
-        i === index ? { ...s, status: newStatus as SuggestionState["status"] } : s
+        i === index ? { ...s, status: newStatus as SuggestionState["status"], previousContent: currentContent } : s
       )
     );
     setEditingIndex(null);
+  }
+
+  // Undo accepted/edited suggestion
+  function handleUndo(index: number) {
+    const suggestion = suggestions[index];
+    if (!suggestion || !activeSectionId || !suggestion.previousContent) return;
+
+    console.log("undo action:", { index, original: suggestion.original_text });
+
+    // Restore the section content to what it was before accept
+    setSections((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSectionId) return s;
+        patchSection(s.id, { content: suggestion.previousContent! });
+        return { ...s, content: suggestion.previousContent! };
+      })
+    );
+
+    setSuggestions((prev) =>
+      prev.map((s, i) =>
+        i === index ? { ...s, status: "pending", previousContent: null } : s
+      )
+    );
   }
 
   function handleSkip(index: number) {
@@ -390,11 +470,15 @@ export default function FinalEditPage({
             </p>
             {finalizedCount === totalSections && totalSections > 0 && (
               <button
-                onClick={() => console.log("Print PDF - version:", versionId)}
+                onClick={() => router.push(`/projects/${projectId}/export/book?version=${versionId}`)}
+                title="Preview / Export"
                 className="text-white text-xs font-semibold transition-colors"
-                style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6 }}
+                style={{ height: 30, padding: "0 12px", background: "linear-gradient(180deg, #5a9af5, #4a88e0)", border: "none", borderRadius: 6, cursor: "pointer" }}
               >
-                Print PDF
+                <span className="flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                  Preview / Export
+                </span>
               </button>
             )}
           </div>
@@ -412,38 +496,108 @@ export default function FinalEditPage({
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar — section nav */}
-        <aside className="w-48 shrink-0 border-r border-[var(--border-default)] px-3 py-4 overflow-y-auto" style={{ background: "var(--surface-1)" }}>
-          <p className="mb-3 px-2 text-xs uppercase tracking-widest text-[var(--text-faint)]">
-            Sections
-          </p>
-          <nav className="flex flex-col gap-1">
-            {sections.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => goToSection(s.id)}
-                className={[
-                  "w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors flex items-center gap-2",
-                  activeSectionId === s.id
-                    ? "bg-[rgba(255,255,255,0.06)] text-[var(--text-primary)]"
-                    : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
-                ].join(" ")}
-              >
+        <aside className="shrink-0 border-r border-[var(--border-default)] overflow-y-auto" style={{ width: 280, background: "var(--surface-1)" }}>
+          <nav className="flex flex-col gap-0.5 text-[13px] px-4 pt-5 pb-4">
+            <div className="px-2 pb-2 mb-1">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Sections</span>
+            </div>
+
+            {(() => {
+              // Group sections: standalone (prologue/epilogue) and chapter groups
+              const standalone = sections.filter((s) => s.section_type !== "chapter");
+              const chapterSections = sections.filter((s) => s.section_type === "chapter");
+              const chapterGroups: { chapterName: string; sections: Section[] }[] = [];
+              for (const s of chapterSections) {
+                const dashIdx = s.section_title.indexOf(" \u2014 ");
+                const chapterName = dashIdx >= 0 ? s.section_title.slice(0, dashIdx) : s.section_title;
+                const existing = chapterGroups.find((g) => g.chapterName === chapterName);
+                if (existing) existing.sections.push(s);
+                else chapterGroups.push({ chapterName, sections: [s] });
+              }
+
+              const statusDot = (s: Section) => (
                 <span
-                  className={[
-                    "text-xs",
-                    s.is_finalized
-                      ? "text-green-400"
-                      : s.is_reviewed
-                      ? "text-yellow-400"
-                      : "text-red-400/60",
-                  ].join(" ")}
+                  className={`shrink-0 text-[10px] ${s.is_finalized ? "text-green-400" : s.is_reviewed ? "text-yellow-400" : "text-red-400/60"}`}
                   title={s.is_finalized ? "Finalized" : s.is_reviewed ? "Reviewed" : "Not reviewed"}
+                >&#9679;</span>
+              );
+
+              const sectionButton = (s: Section, label: string) => (
+                <button
+                  key={s.id}
+                  onClick={() => goToSection(s.id)}
+                  className={[
+                    "w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors flex items-center gap-2",
+                    activeSectionId === s.id
+                      ? "bg-[var(--overlay-active)] text-[var(--text-primary)]"
+                      : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]",
+                  ].join(" ")}
                 >
-                  &#9679;
-                </span>
-                <span className="truncate">{s.section_title}</span>
-              </button>
-            ))}
+                  {statusDot(s)}
+                  <span className="truncate">{label}</span>
+                </button>
+              );
+
+              return (
+                <>
+                  {/* Prologue */}
+                  {standalone.filter((s) => s.section_type === "prologue").map((s) => sectionButton(s, "Prologue"))}
+
+                  {/* Chapter groups */}
+                  {chapterGroups.map((group) => {
+                    const isExpanded = expandedChapters[group.chapterName] ?? true;
+                    const isChildActive = group.sections.some((s) => s.id === activeSectionId);
+                    return (
+                      <div key={group.chapterName}>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => setExpandedChapters((prev) => ({ ...prev, [group.chapterName]: !prev[group.chapterName] }))}
+                            className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                            style={{ width: 16, height: 16 }}
+                          >
+                            <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
+                          </button>
+                          <button
+                            onClick={() => setExpandedChapters((prev) => ({ ...prev, [group.chapterName]: !prev[group.chapterName] }))}
+                            className={`flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium min-w-0 transition-colors ${isChildActive ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}
+                            style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                          >
+                            {group.chapterName}
+                          </button>
+                          <span className="shrink-0 text-[11px] mr-1" style={{ color: "var(--text-faint)" }}>({group.sections.length})</span>
+                        </div>
+                        {isExpanded && (
+                          <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                            {group.sections.map((s) => {
+                              const dashIdx = s.section_title.indexOf(" \u2014 ");
+                              const sectionLabel = dashIdx >= 0 ? s.section_title.slice(dashIdx + 3) : s.section_title;
+                              return (
+                                <button
+                                  key={s.id}
+                                  onClick={() => goToSection(s.id)}
+                                  className={[
+                                    "w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0",
+                                    activeSectionId === s.id
+                                      ? "bg-[var(--overlay-active)] text-[var(--text-primary)]"
+                                      : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]",
+                                  ].join(" ")}
+                                >
+                                  {statusDot(s)}
+                                  <span className="truncate">{sectionLabel}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Epilogue */}
+                  {standalone.filter((s) => s.section_type === "epilogue").map((s) => sectionButton(s, "Epilogue"))}
+                </>
+              );
+            })()}
           </nav>
         </aside>
 
@@ -491,11 +645,7 @@ export default function FinalEditPage({
               <p className="text-xs text-[var(--text-faint)] mb-4">{aiStatusLabel}</p>
 
               {/* Content editor */}
-              {activeSectionData.is_finalized ? (
-                <div className="whitespace-pre-wrap text-[13px] text-[var(--text-tertiary)] leading-7 bg-[rgba(255,255,255,0.03)] rounded-lg p-4 min-h-[40vh]">
-                  {activeSectionData.content}
-                </div>
-              ) : activeSectionData.section_type === "info" ? (
+              {activeSectionData.section_type === "info" ? (
                 <pre className="whitespace-pre-wrap text-[13px] text-[var(--text-tertiary)] leading-7 bg-[rgba(255,255,255,0.03)] rounded-lg p-4">
                   {(() => {
                     try {
@@ -510,14 +660,14 @@ export default function FinalEditPage({
                   })()}
                 </pre>
               ) : (
-                <textarea
-                  value={activeSectionData.content}
-                  onChange={(e) =>
-                    handleSectionContentChange(activeSectionData.id, e.target.value)
-                  }
-                  className="w-full min-h-[55vh] rounded-lg border border-[var(--border-default)] bg-[rgba(255,255,255,0.03)] px-4 py-3 text-[13px] text-[var(--text-secondary)] leading-7 placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none resize-none"
-                  placeholder="Section content..."
-                />
+                <div className="min-h-[55vh]">
+                  <RichTextEditor
+                    content={activeSectionData.content}
+                    onChange={(html) => handleSectionContentChange(activeSectionData.id, html)}
+                    placeholder="Section content..."
+                    label={activeSectionData.section_title}
+                  />
+                </div>
               )}
 
               {/* Prev / Next navigation */}
@@ -635,8 +785,22 @@ export default function FinalEditPage({
                         </button>
                       </div>
                     )}
-                    {s.status === "accepted" && <p className="text-green-400/60">Accepted</p>}
-                    {s.status === "edited" && <p className="text-green-400/60">Edited &amp; Applied</p>}
+                    {s.status === "accepted" && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-green-400/60">Accepted</p>
+                        {s.previousContent && (
+                          <button onClick={() => handleUndo(i)} className="rounded bg-[rgba(255,255,255,0.06)] px-2 py-0.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-tertiary)]">Undo</button>
+                        )}
+                      </div>
+                    )}
+                    {s.status === "edited" && (
+                      <div className="flex items-center gap-2">
+                        <p className="text-green-400/60">Edited &amp; Applied</p>
+                        {s.previousContent && (
+                          <button onClick={() => handleUndo(i)} className="rounded bg-[rgba(255,255,255,0.06)] px-2 py-0.5 text-[var(--text-faint)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-tertiary)]">Undo</button>
+                        )}
+                      </div>
+                    )}
                     {s.status === "skipped" && <p className="text-[var(--text-faint)]">Skipped</p>}
                   </div>
                 ))}

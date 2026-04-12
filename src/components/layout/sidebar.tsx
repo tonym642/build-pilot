@@ -3,6 +3,15 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useTheme } from "@/components/layout/theme-context";
+import { useModes, type ModeKey } from "@/components/layout/modes-context";
+
+/** Maps sidebar filter labels to mode keys for visibility checks */
+const FILTER_TO_MODE: Record<string, ModeKey> = {
+  Apps: "App",
+  Books: "Book",
+  Businesses: "Business",
+  Music: "Music",
+};
 
 const NAV_ITEMS = [
   {
@@ -68,8 +77,15 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { theme } = useTheme();
+  const { isModeEnabled } = useModes();
   const isHome = pathname === "/";
   const activeFilter = searchParams.get("filter") ?? "All";
+
+  const visibleNavItems = NAV_ITEMS.filter((item) => {
+    if (item.filter === "All") return true;
+    const modeKey = FILTER_TO_MODE[item.filter];
+    return modeKey ? isModeEnabled(modeKey) : true;
+  });
 
   return (
     <aside
@@ -95,7 +111,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       {/* Navigation */}
       <nav className="flex flex-col" style={{ gap: 2, padding: "0 8px" }}>
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           const isActive = isHome && activeFilter === item.filter;
           return (
             <Link
@@ -137,6 +153,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           );
         })}
       </nav>
+
     </aside>
   );
 }

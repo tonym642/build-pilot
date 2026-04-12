@@ -7,6 +7,16 @@ import { useWorkspace, EMPTY_WORKSPACE, type WorkspaceData } from "./workspace";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { ThemeToggle } from "@/components/layout/theme-context";
+import { useModes, type ModeKey } from "@/components/layout/modes-context";
+import {
+  loadAIEngineConfig,
+  resolveProjectContext,
+  resolveWorkContext,
+  type StageKey as AiStageKey,
+  type ProjectContext,
+  type WorkContext as AiWorkContext,
+  type ChatHistoryEntry,
+} from "@/lib/ai-engine";
 
 const TOP_TABS = ["Book", "Workspace"] as const;
 type TopTab = (typeof TOP_TABS)[number];
@@ -29,6 +39,9 @@ function hasContent(html: string): boolean {
 function cleanManuscriptHtml(html: string): string {
   if (!html) return "";
   return html
+    .replace(/<span\s+style="[^"]*">([\s\S]*?)<\/span>/gi, "$1")
+    .replace(/<span\s*>([\s\S]*?)<\/span>/gi, "$1")
+    .replace(/\s+style="[^"]*"/gi, "")
     .replace(/<p>\s*[-–—]{2,}\s*<\/p>/gi, "")
     .replace(/<p>\s*---\s*<\/p>/gi, "")
     .replace(/<hr\s*\/?>/gi, "");
@@ -39,6 +52,7 @@ type Stage = (typeof STAGES)[number];
 
 type AiMessage = {
   id: number;
+  db_id: string | null;
   role: "user" | "ai";
   text: string;
   is_favorite: boolean;
@@ -49,8 +63,8 @@ type AiMessage = {
   created_at: Date;
 };
 
-function newAiMessage(id: number, role: "user" | "ai", text: string): AiMessage {
-  return { id, role, text, is_favorite: false, is_liked: false, is_disliked: false, is_hidden: false, is_deleted: false, created_at: new Date() };
+function newAiMessage(id: number, role: "user" | "ai", text: string, db_id?: string | null): AiMessage {
+  return { id, role, text, db_id: db_id ?? null, is_favorite: false, is_liked: false, is_disliked: false, is_hidden: false, is_deleted: false, created_at: new Date() };
 }
 
 type AiFilter = "brainstorm" | "favorites" | "liked" | "disliked" | "hidden" | "trash";
@@ -146,12 +160,20 @@ function BookInfoPanel({
   onUpdateAiMessage,
   onAddAiMessage,
   projectId,
+  mode,
+  stage,
+  projectCtx,
+  workCtx,
 }: {
   bookInfo: BookInfo;
   onChange: (updated: BookInfo) => void;
   aiMessages: AiMessage[];
   onUpdateAiMessage: (updated: AiMessage) => void;
   onAddAiMessage: (message: AiMessage) => void;
+  mode?: string;
+  stage?: string;
+  projectCtx?: ProjectContext;
+  workCtx?: AiWorkContext;
   projectId: string;
 }) {
   const [mobileAiOpen, setMobileAiOpen] = useState(false);
@@ -298,7 +320,7 @@ function BookInfoPanel({
       {mobileAiOpen && (
         <div className="desktop-hidden shrink-0 mobile-px-4 pb-4" style={{ minHeight: 300 }}>
           <div className="h-full rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="Book Info" onAddMessage={onAddAiMessage} />
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} />
           </div>
         </div>
       )}
@@ -323,7 +345,7 @@ function BookInfoPanel({
             </button>
           </div>
           <div className="flex-1 min-h-0">
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="Book Info" onAddMessage={onAddAiMessage} />
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} />
           </div>
         </div>
       )}
@@ -382,26 +404,66 @@ function AiActionBar({
 
 function AiPanel({
   messages, onUpdateMessage, projectId, bookTitle, chapter, onAddMessage,
+  mode, stage, projectContext, workContext, getSelectedText,
 }: {
   messages: AiMessage[]; onUpdateMessage: (updated: AiMessage) => void; projectId: string; bookTitle: string; chapter: string; onAddMessage: (message: AiMessage) => void;
+  mode?: string; stage?: string; projectContext?: ProjectContext; workContext?: AiWorkContext; getSelectedText?: () => string;
 }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<AiFilter>("brainstorm");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   async function handleSubmit() {
     if (!input.trim() || loading) return;
     const trimmed = input.trim();
-    onAddMessage(newAiMessage(Date.now(), "user", trimmed));
+    const userMsgLocalId = Date.now();
+    onAddMessage(newAiMessage(userMsgLocalId, "user", trimmed));
     setInput("");
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setLoading(true);
     try {
-      const res = await fetch("/api/brainstorm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message: trimmed, chapter, bookTitle, project_id: projectId }) });
+      // Build recent chat history from visible messages
+      const recentHistory: ChatHistoryEntry[] = messages
+        .filter((m) => !m.is_deleted && !m.is_hidden)
+        .slice(-10)
+        .map((m) => ({ role: m.role === "user" ? "user" as const : "assistant" as const, text: m.text }));
+
+      // Load AI Engine config from localStorage
+      const aiEngine = loadAIEngineConfig();
+
+      // Capture editor selection at the moment of submit
+      const selectedText = getSelectedText ? getSelectedText() : "";
+
+      const payload: Record<string, unknown> = {
+        message: trimmed,
+        project_id: projectId,
+        chapter,
+        bookTitle,
+        mode: mode || "Book",
+        page: stage || "compose",
+        aiEngine,
+        history: recentHistory,
+      };
+      if (projectContext) payload.projectContext = projectContext;
+      // Merge selected text (or full section fallback) into work context
+      const hasSelection = selectedText && selectedText.trim() !== "";
+      const mergedWorkContext = workContext
+        ? { ...workContext, ...(hasSelection ? { selectedText } : { fullSectionText: workContext.editorContent || "" }) }
+        : hasSelection ? { currentPage: stage || "compose", selectedText } : undefined;
+      if (mergedWorkContext) payload.workContext = mergedWorkContext;
+
+      const res = await fetch("/api/brainstorm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
-      onAddMessage(newAiMessage(Date.now() + 1, "ai", res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again."));
+      const aiMsgLocalId = Date.now() + 1;
+      onAddMessage(newAiMessage(aiMsgLocalId, "ai", res.ok && data.reply ? data.reply : "I couldn't generate a response right now. Please try again.", data.aiMsgId));
+      // Backfill db_id on the user message
+      if (data.userMsgId) {
+        onUpdateMessage({ ...newAiMessage(userMsgLocalId, "user", trimmed, data.userMsgId) });
+      }
     } catch { onAddMessage(newAiMessage(Date.now() + 1, "ai", "I couldn't generate a response right now. Please try again.")); }
     finally { setLoading(false); }
   }
@@ -423,30 +485,63 @@ function AiPanel({
           {filtered.map((msg) => (
             <div key={msg.id}>
               {msg.role === "user" ? (
-                <div className="flex justify-end"><p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p></div>
+                <div className="flex justify-end items-start gap-1.5 group/user">
+                  <button
+                    onClick={() => onUpdateMessage({ ...msg, is_hidden: true })}
+                    title="Hide message"
+                    className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
+                    style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" /><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                  </button>
+                  <button
+                    onClick={() => onUpdateMessage({ ...msg, is_deleted: true })}
+                    title="Delete message"
+                    className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
+                    style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                  </button>
+                  <p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
+                </div>
               ) : (
                 <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><AiActionBar message={msg} onUpdate={onUpdateMessage} /></div>
               )}
             </div>
           ))}
-          {filtered.length === 0 && <p className="text-[12px] text-[var(--text-faint)] text-center py-8">{activeFilter === "brainstorm" ? "Start a conversation with your AI assistant." : `No ${activeFilter} messages.`}</p>}
+          {filtered.length === 0 && !loading && <p className="text-[12px] text-[var(--text-faint)] text-center py-8">{activeFilter === "brainstorm" ? "Start a conversation with your AI assistant." : `No ${activeFilter} messages.`}</p>}
+          {loading && (
+            <div className="flex items-center gap-2 py-2">
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--text-faint)] animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
+              </div>
+              <span className="text-[12px] text-[var(--text-faint)]">AI is thinking...</span>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
       <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
         <div
-          className="flex items-center gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
+          className="flex items-end gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}
         >
-          <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1 }}>+</span>
-          <input
-            type="text"
+          <span style={{ color: "var(--text-faint)", fontSize: 16, flexShrink: 0, lineHeight: 1, paddingBottom: 6 }}>+</span>
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSubmit(); } }}
+            onChange={(e) => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
             placeholder="Add an idea, ask a question, or give direction..."
-            className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)]"
-            style={{ padding: "5px 0", fontFamily: "inherit" }}
+            rows={1}
+            className="flex-1 bg-transparent border-none outline-none text-[13px] text-[var(--text-primary)] placeholder-[var(--text-faint)] resize-none"
+            style={{ padding: "5px 0", fontFamily: "inherit", maxHeight: 120, overflowY: "auto", lineHeight: "1.5" }}
           />
           {loading ? (
             <div className="flex items-center justify-center" style={{ width: 24, height: 24, flexShrink: 0 }}>
@@ -483,14 +578,17 @@ function AiPanel({
 /* ─── Compose Page (split layout) — only for sections ───────── */
 
 function ComposePage({
-  sectionTitle, composeText, onComposeChange, aiMessages, onUpdateAiMessage, onAddAiMessage, projectId, bookTitle,
+  sectionTitle, chapterId, composeText, onComposeChange, aiMessages, onUpdateAiMessage, onAddAiMessage, projectId, bookTitle,
+  mode, stage, projectCtx, workCtx,
 }: {
-  sectionTitle: string; composeText: string; onComposeChange: (text: string) => void; aiMessages: AiMessage[]; onUpdateAiMessage: (updated: AiMessage) => void; onAddAiMessage: (message: AiMessage) => void; projectId: string; bookTitle: string;
+  sectionTitle: string; chapterId?: string; composeText: string; onComposeChange: (text: string) => void; aiMessages: AiMessage[]; onUpdateAiMessage: (updated: AiMessage) => void; onAddAiMessage: (message: AiMessage) => void; projectId: string; bookTitle: string;
+  mode?: string; stage?: string; projectCtx?: ProjectContext; workCtx?: AiWorkContext;
 }) {
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
   const [dividerX, setDividerX] = useState(50);
   const dragging = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const getSelectionRef = useRef<() => string>(() => "");
 
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -509,7 +607,7 @@ function ComposePage({
     <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
       <div className="flex flex-col min-h-0" style={{ width: aiPanelOpen ? `${dividerX}%` : "100%" }}>
         <div className="flex-1 min-h-0 p-6 mobile-px-4">
-          <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" />
+          <RichTextEditor content={composeText} onChange={onComposeChange} label={sectionTitle} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} />
         </div>
       </div>
       {/* Mobile AI toggle */}
@@ -540,7 +638,7 @@ function ComposePage({
       {aiPanelOpen && (
         <div className="min-h-0 flex flex-col pr-6 pt-6 pb-6 mobile-px-4" style={{ width: `${100 - dividerX}%` }}>
           <div className="flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={sectionTitle} onAddMessage={onAddAiMessage} />
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookTitle} chapter={chapterId || sectionTitle} onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} getSelectedText={getSelectionRef.current} />
           </div>
         </div>
       )}
@@ -580,7 +678,7 @@ function InlineTitle({
 /* ─── Publish Sidebar ──────────────────────────────────────── */
 
 function PublishSidebar({
-  chapters, composeTexts, bookVersions, bookInfo, selectedVersionId, onPreview, onAdapt,
+  chapters, composeTexts, bookVersions, bookInfo, selectedVersionId, onPreview, onExport, onAdapt,
 }: {
   chapters: ChapterData[];
   composeTexts: Record<string, string>;
@@ -588,6 +686,7 @@ function PublishSidebar({
   bookInfo: BookInfo;
   selectedVersionId: string | null;
   onPreview: (versionId: string) => void;
+  onExport: (versionId: string) => void;
   onAdapt: () => void;
 }) {
   // ── Live data calculations ────────────────────────────────
@@ -707,13 +806,13 @@ function PublishSidebar({
               >
                 Preview
               </button>
-              {/* TODO: Wire download to generate PDF/DOCX export of activeVersion */}
               <button
                 disabled={!actionsEnabled}
+                onClick={() => { if (activeVersion) onExport(activeVersion.id); }}
                 className="w-full rounded-lg border border-[var(--border-default)] px-3 py-1.5 text-[12px] font-medium transition-colors hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)] disabled:opacity-40 disabled:cursor-default"
                 style={{ color: actionsEnabled ? "var(--text-secondary)" : "var(--text-muted)" }}
               >
-                Download
+                Download / Export
               </button>
               <button
                 onClick={onAdapt}
@@ -845,6 +944,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const { id: projectId } = use(params);
   const router = useRouter();
   const { openMainSidebar } = useMainSidebar();
+  const { isModeEnabled } = useModes();
   const searchParams = useSearchParams();
   const [projectName, setProjectName] = useState<string>("");
   const [projectType, setProjectType] = useState<string>("Book");
@@ -929,7 +1029,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       for (const row of data) { const ch = row.chapter_id ?? "default"; if (!grouped[ch]) grouped[ch] = []; grouped[ch].push(row); }
       const newMessages: Record<string, AiMessage[]> = {};
       for (const [ch, rows] of Object.entries(grouped)) {
-        newMessages[ch] = rows.map((row: Record<string, unknown>, i: number) => newAiMessage(i + 1, (row.role === "assistant" ? "ai" : "user") as AiMessage["role"], row.message as string));
+        newMessages[ch] = rows.map((row: Record<string, unknown>, i: number) => {
+          const msg = newAiMessage(i + 1, (row.role === "assistant" ? "ai" : "user") as AiMessage["role"], row.message as string, row.id as string);
+          msg.is_favorite = !!row.is_favorite;
+          msg.is_liked = !!row.is_liked;
+          msg.is_disliked = !!row.is_disliked;
+          msg.is_hidden = !!row.is_hidden;
+          msg.is_deleted = !!row.is_deleted;
+          return msg;
+        });
       }
       setAiMessages((prev) => { const merged = { ...prev }; for (const [ch, msgs] of Object.entries(newMessages)) { if (!merged[ch] || merged[ch].length === 0) merged[ch] = msgs; } return merged; });
       setMessagesLoaded(true);
@@ -975,7 +1083,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chapters]);
 
-  // Auto-save compose texts (debounced)
+  // Auto-save compose texts (debounced) — Source: draft_blocks table. Used by Compose + Manuscript.
   const composeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const composeLoadedRef = useRef(false);
 
@@ -1007,7 +1115,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceData]);
 
-  // Load compose texts from drafts
+  // Load compose texts from drafts — Source: draft_blocks table. Feeds both Compose editor and Manuscript preview.
   useEffect(() => {
     if (!projectId) return;
     fetch(`/api/projects/${projectId}/drafts`).then((res) => res.json()).then((data) => {
@@ -1086,6 +1194,21 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
   function handleUpdateAiMessage(key: string, updated: AiMessage) {
     setAiMessages((prev) => ({ ...prev, [key]: (prev[key] ?? []).map((m) => m.id === updated.id ? updated : m) }));
+    // Persist flag changes to database
+    if (updated.db_id && projectId) {
+      fetch(`/api/projects/${projectId}/messages`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messageId: updated.db_id,
+          is_favorite: updated.is_favorite,
+          is_liked: updated.is_liked,
+          is_disliked: updated.is_disliked,
+          is_hidden: updated.is_hidden,
+          is_deleted: updated.is_deleted,
+        }),
+      }).catch((err) => console.error("Failed to persist message flags:", err));
+    }
   }
 
   // ─── Publish ───────────────────────────────────────────────
@@ -1093,6 +1216,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [sendingToPublish, setSendingToPublish] = useState(false);
   const [sendToPublishSuccess, setSendToPublishSuccess] = useState(false);
 
+  // Snapshot composeTexts (draft_blocks) → book_versions + book_version_sections.
+  // This is a ONE-WAY copy. Publish edits do NOT flow back to Compose or Manuscript.
   async function handleSendToPublish() {
     setSendingToPublish(true);
     setSendToPublishSuccess(false);
@@ -1169,13 +1294,67 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     return "";
   })();
 
+  // Resolved AI context for the instruction pipeline
+  const aiProjectCtx = resolveProjectContext(bookInfo, projectName);
+  const currentChapterTitle = (() => {
+    if (selection.type === "chapter" || selection.type === "section") {
+      const ch = chapters.find((c) => c.id === selection.chapterId);
+      return ch?.title ?? undefined;
+    }
+    return undefined;
+  })();
+  const aiWorkCtx = resolveWorkContext({
+    stage: activeStage,
+    chapterTitle: currentChapterTitle,
+    sectionTitle: currentSectionTitle || undefined,
+    editorContent: isWritableSection ? composeTexts[composeKey] : undefined,
+  });
+  const aiStage = activeStage.toLowerCase() as AiStageKey;
+
+  // Block disabled modes
+  if (projectType && !isModeEnabled(projectType as ModeKey)) {
+    return (
+      <div className="flex flex-col items-center justify-center" style={{ height: "100vh", background: "var(--surface-1)" }}>
+        <div style={{ textAlign: "center", maxWidth: 360 }}>
+          <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.25 }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline" }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+            </svg>
+          </div>
+          <h1 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)", marginBottom: 6 }}>
+            Mode unavailable
+          </h1>
+          <p className="text-[13px]" style={{ color: "var(--text-muted)", lineHeight: 1.5 }}>
+            This mode is currently disabled in Settings.
+          </p>
+          <button
+            onClick={() => router.push("/")}
+            className="text-[12px] font-medium"
+            style={{
+              marginTop: 20,
+              padding: "6px 14px",
+              borderRadius: 6,
+              background: "var(--overlay-hover)",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)",
+              cursor: "pointer",
+            }}
+          >
+            Back to Projects
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Render App mode
   if (projectType === "App") {
     return <AppMode projectId={projectId} projectName={projectName} />;
   }
 
   return (
-    <div className="flex flex-col" style={{ height: "100vh" }}>
+    <div className="flex flex-col" style={{ height: "100vh", background: "var(--surface-1)", position: "relative", zIndex: 1, isolation: "isolate" }}>
       {/* Project header bar */}
       <div
         className="flex shrink-0 items-center gap-4 mobile-px-4"
@@ -1208,16 +1387,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined }}>
           {/* Book | Workspace tabs (hidden on Publish) */}
           {!(topTab === "Book" && activeStage === "Publish") && (
-          <div className="flex items-center gap-1 px-4 pt-4 pb-3 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+          <div className="flex items-end gap-1 px-4 pt-4 pb-0 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
             {TOP_TABS.map((tab) => (
-              <button key={tab} onClick={() => setTopTab(tab)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${topTab === tab ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={topTab === tab ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{tab}</button>
+              <button key={tab} onClick={() => setTopTab(tab)} className={`px-3 py-1.5 text-[13px] transition-colors ${topTab === tab ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={topTab === tab ? { border: "1px solid var(--border-subtle)", borderBottom: "2px solid var(--accent-blue)", borderRadius: "6px 6px 0 0", background: "var(--overlay-hover)", marginBottom: -1 } : { border: "1px solid transparent", borderBottom: "2px solid transparent", borderRadius: "6px 6px 0 0", marginBottom: -1 }}>{tab}</button>
             ))}
           </div>
           )}
 
           {/* Publish sidebar: Project Status panel */}
           {topTab === "Book" && activeStage === "Publish" && (
-          <PublishSidebar chapters={chapters} composeTexts={composeTexts} bookVersions={bookVersions} bookInfo={bookInfo} selectedVersionId={selectedVersionId} onPreview={(vId) => router.push(`/projects/${projectId}/book/${vId}`)} onAdapt={() => setShowAdaptModal(true)} />
+          <PublishSidebar chapters={chapters} composeTexts={composeTexts} bookVersions={bookVersions} bookInfo={bookInfo} selectedVersionId={selectedVersionId} onPreview={(vId) => router.push(`/projects/${projectId}/book/${vId}`)} onExport={(vId) => router.push(`/projects/${projectId}/export/book?version=${vId}`)} onAdapt={() => setShowAdaptModal(true)} />
           )}
 
           {/* Book sidebar content */}
@@ -1381,9 +1560,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           {/* Book sub-navigation */}
           {topTab === "Book" && (
-            <div className="flex shrink-0 gap-1 px-8 mobile-px-4 mx-6" style={{ overflowX: "auto", paddingTop: 12, paddingBottom: 12, borderBottom: "1px solid var(--border-default)" }}>
+            <div className="flex shrink-0 items-end gap-1 px-8 mobile-px-4 mx-6" style={{ overflowX: "auto", paddingTop: 12, paddingBottom: 0, borderBottom: "1px solid var(--border-default)" }}>
               {STAGES.map((stage) => (
-                <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] rounded transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { borderBottom: "2px solid var(--accent-blue)" } : undefined}>{stage}</button>
+                <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { border: "1px solid var(--border-subtle)", borderBottom: "2px solid var(--accent-blue)", borderRadius: "6px 6px 0 0", background: "var(--overlay-hover)", marginBottom: -1 } : { border: "1px solid transparent", borderBottom: "2px solid transparent", borderRadius: "6px 6px 0 0", marginBottom: -1 }}>{stage}</button>
               ))}
             </div>
           )}
@@ -1399,10 +1578,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               onUpdateAiMessage={(updated) => handleUpdateAiMessage("book_info", updated)}
               onAddAiMessage={(msg) => handleAddAiMessage("book_info", msg)}
               projectId={projectId}
+              mode={projectType}
+              stage={aiStage}
+              projectCtx={aiProjectCtx}
+              workCtx={aiWorkCtx}
             />
           ) : activeStage === "Compose" && isWritableSection ? (
             <ComposePage
               sectionTitle={currentSectionTitle}
+              chapterId={composeKey}
               composeText={composeTexts[composeKey] ?? ""}
               onComposeChange={(text) => handleComposeChange(composeKey, text)}
               aiMessages={aiMessages[composeKey] ?? []}
@@ -1410,9 +1594,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               onAddAiMessage={(msg) => handleAddAiMessage(composeKey, msg)}
               projectId={projectId}
               bookTitle={bookInfo.title || projectName || "this book"}
+              mode={projectType}
+              stage={aiStage}
+              projectCtx={aiProjectCtx}
+              workCtx={aiWorkCtx}
             />
 
-          /* ─── MANUSCRIPT ─── */
+          /* ─── MANUSCRIPT ───
+           * Source: composeTexts (from draft_blocks table) — read-only preview of current draft.
+           * Does NOT reflect Publish/Final Edit changes. Those live in book_version_sections.
+           */
           ) : activeStage === "Manuscript" ? (
             <div className="overflow-y-auto h-full px-8 py-6 mobile-px-4">
               <div className="mx-auto" style={{ maxWidth: 900 }}>
@@ -1578,8 +1769,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                                   </button>
                                 </td>
                                 <td className="py-2.5 pr-3.5 w-10">
-                                  <button onClick={(e) => { e.stopPropagation(); console.log("Print PDF - version:", v.id); }} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Print PDF">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9V2h12v7" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+                                  <button onClick={(e) => { e.stopPropagation(); router.push(`/projects/${projectId}/export/book?version=${v.id}`); }} className="rounded p-1.5 text-[var(--text-faint)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-tertiary)]" title="Preview / Export">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
                                   </button>
                                 </td>
                               </tr>

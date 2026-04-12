@@ -3,6 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
 import { AppShell } from "@/components/layout/app-shell";
 import { ThemeProvider } from "@/components/layout/theme-context";
+import { ModesProvider } from "@/components/layout/modes-context";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -19,7 +20,9 @@ export default function RootLayout({
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <body>
         <ThemeProvider>
-          <AppShell>{children}</AppShell>
+          <ModesProvider>
+            <AppShell>{children}</AppShell>
+          </ModesProvider>
         </ThemeProvider>
       </body>
     </html>

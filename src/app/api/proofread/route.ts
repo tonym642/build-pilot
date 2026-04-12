@@ -20,16 +20,22 @@ export async function POST(req: NextRequest) {
 
   const prompt = `You are a professional book editor doing a final proofread of a section titled "${sectionTitle}".
 
-Review the following text and provide specific suggestions for improvement. Focus on:
+Review the following text and provide ONLY suggestions where a change is actually needed. Focus on:
 - Grammar and spelling errors
 - Awkward phrasing or unclear sentences
 - Consistency in tone and style
 - Redundant or unnecessary words
 - Punctuation issues
 
+IMPORTANT RULES:
+- Only include suggestions where the original_text and suggested_text are DIFFERENT.
+- Do NOT include entries where the text is already correct or needs no changes.
+- Do NOT include suggestions that say "no change needed" or where you are confirming text is fine.
+- Every suggestion must propose a concrete edit — a real change to the text.
+
 Return your response as a valid JSON array of suggestion objects. Each suggestion must have exactly these fields:
 - "original_text": the exact text from the content that should be changed (must be a verbatim substring)
-- "suggested_text": the improved replacement text
+- "suggested_text": the improved replacement text (MUST be different from original_text)
 - "reason": a brief explanation of why this change improves the text
 
 If the text is already well-written and needs no changes, return an empty array: []
@@ -56,6 +62,12 @@ ${body.content}`;
       console.error("Failed to parse AI response as JSON:", raw);
       suggestions = [];
     }
+
+    // Filter out suggestions where no actual change is proposed
+    suggestions = suggestions.filter(
+      (s: { original_text?: string; suggested_text?: string }) =>
+        s.original_text && s.suggested_text && s.original_text !== s.suggested_text
+    );
 
     return NextResponse.json({ suggestions });
   } catch (err) {

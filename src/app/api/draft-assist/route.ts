@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
+import {
+  buildAiMessages,
+  flattenMessagesToPrompt,
+  stripHtmlToPlainText,
+  type ModeKey,
+  type StageKey,
+  type AIEngineConfig,
+  type ProjectContext,
+  type WorkContext,
+  EMPTY_AI_ENGINE_CONFIG,
+} from "@/lib/ai-engine";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -28,24 +39,38 @@ export async function POST(req: NextRequest) {
 
   const content: string = body.content.trim();
   const action: string = body.action;
-  const chapter: string = typeof body.chapter === "string" ? body.chapter : "this chapter";
-  const bookTitle: string = typeof body.bookTitle === "string" ? body.bookTitle : "this book";
 
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json({ error: "OpenAI API key not configured." }, { status: 500 });
   }
 
-  const prompt = `You are an editor helping an author refine content for their book.
+  // Build AI Engine config from client payload
+  const aiEngineConfig: AIEngineConfig = body.aiEngine ?? EMPTY_AI_ENGINE_CONFIG;
+  const mode: ModeKey = body.mode ?? "Book";
+  const page: StageKey = body.page ?? "compose";
 
-Book: "${bookTitle}"
-Chapter: ${chapter}
+  const projectContext: ProjectContext = body.projectContext ?? {
+    title: typeof body.bookTitle === "string" ? body.bookTitle : "this book",
+  };
 
-${ACTION_INSTRUCTIONS[action]}
+  const workContext: WorkContext = body.workContext ?? {
+    currentPage: page,
+    selectedChapter: typeof body.chapter === "string" ? body.chapter : undefined,
+  };
 
-Respond in plain text only. Do not use markdown, bold, italic, or bullet points. Write clean natural prose.
+  // Build instruction-grounded prompt with action
+  const actionPrompt = `${ACTION_INSTRUCTIONS[action]}\n\nRespond in plain text only. Do not use markdown, bold, italic, or bullet points. Write clean natural prose.\n\nText to ${action}:\n${content}`;
 
-Text to ${action}:
-${content}`;
+  const aiMessages = buildAiMessages({
+    mode,
+    page,
+    config: aiEngineConfig,
+    projectContext,
+    workContext,
+    userPrompt: actionPrompt,
+  });
+
+  const prompt = flattenMessagesToPrompt(aiMessages);
 
   try {
     const response = await openai.responses.create({
@@ -53,7 +78,8 @@ ${content}`;
       input: prompt,
     });
 
-    const result = response.output_text?.trim() || "";
+    const rawResult = response.output_text?.trim() || "";
+    const result = stripHtmlToPlainText(rawResult);
     return NextResponse.json({ result });
   } catch (err) {
     console.error("Draft assist failed:", err);
