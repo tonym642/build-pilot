@@ -183,9 +183,9 @@ function BookInfoPanel({
     { key: "subtitle", label: "Subtitle", placeholder: "e.g. A guide to living intentionally" },
     { key: "author", label: "Author", placeholder: "e.g. Tony Medina" },
     { key: "genre", label: "Genre", placeholder: "e.g. Self-help, Memoir, Fiction" },
-    { key: "tone", label: "Tone", placeholder: "e.g. Warm, direct, conversational" },
+    { key: "tone", label: "Tone", multiline: true, placeholder: "e.g. Warm, direct, conversational" },
     { key: "year_published", label: "Year Published", placeholder: "e.g. 2026" },
-    { key: "one_line_hook", label: "One-Line Hook", multiline: false, placeholder: "A single sentence that captures the essence of the book" },
+    { key: "one_line_hook", label: "One-Line Hook", multiline: true, placeholder: "A single sentence that captures the essence of the book" },
     { key: "audience", label: "Audience", multiline: true, placeholder: "Who is this book for?" },
     { key: "promise", label: "Promise", multiline: true, placeholder: "What will readers gain or feel by the end?" },
   ];
@@ -206,9 +206,11 @@ function BookInfoPanel({
                 <div className="flex-1">
                   {multiline ? (
                     <textarea
-                      rows={3}
+                      rows={1}
                       value={bookInfo[key]}
-                      onChange={(e) => onChange({ ...bookInfo, [key]: e.target.value })}
+                      onChange={(e) => { onChange({ ...bookInfo, [key]: e.target.value }); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                      onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                      ref={(el) => { if (el && bookInfo[key]) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
                       placeholder={placeholder}
                       className="w-full resize-none rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors"
                     />
@@ -612,47 +614,43 @@ function ComposePage({
 
   // ─── Single note per section ───
   const [notesContent, setNotesContent] = useState("");
-  const [notesLoaded, setNotesLoaded] = useState(false);
   const notesSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const notesSkipSave = useRef(true);
   const sectionIdForNotes = chapterId || sectionTitle;
   const sectionIdRef = useRef(sectionIdForNotes);
   sectionIdRef.current = sectionIdForNotes;
+  // Track which content came from the server so we don't save it back immediately
+  const notesServerContent = useRef("");
+  const notesUserEdited = useRef(false);
 
   // Load note when section changes
   useEffect(() => {
-    // Cancel any pending save from previous section
     if (notesSaveRef.current) { clearTimeout(notesSaveRef.current); notesSaveRef.current = null; }
-    notesSkipSave.current = true;
-    setNotesLoaded(false);
+    notesUserEdited.current = false;
     if (!projectId || !sectionIdForNotes) return;
     fetch(`/api/projects/${projectId}/notes?section_id=${encodeURIComponent(sectionIdForNotes)}`)
       .then((res) => res.json())
       .then((data) => {
         const content = Array.isArray(data) ? (data[0]?.content ?? "") : (data?.content ?? "");
+        notesServerContent.current = content;
         setNotesContent(content);
-        setNotesLoaded(true);
-        // Skip the first save triggered by setNotesContent
-        requestAnimationFrame(() => { notesSkipSave.current = false; });
       })
-      .catch(() => { setNotesContent(""); setNotesLoaded(true); requestAnimationFrame(() => { notesSkipSave.current = false; }); });
+      .catch(() => { notesServerContent.current = ""; setNotesContent(""); });
   }, [projectId, sectionIdForNotes]);
 
-  // Autosave note (debounced)
-  useEffect(() => {
-    if (!notesLoaded || notesSkipSave.current) return;
+  // Handle note changes from the editor
+  function handleNotesChange(html: string) {
+    setNotesContent(html);
+    notesUserEdited.current = true;
     if (notesSaveRef.current) clearTimeout(notesSaveRef.current);
     const sid = sectionIdRef.current;
-    const content = notesContent;
     notesSaveRef.current = setTimeout(() => {
       fetch(`/api/projects/${projectId}/notes`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section_id: sid, content }),
+        body: JSON.stringify({ section_id: sid, content: html }),
       });
     }, 800);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notesContent]);
+  }
 
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -739,6 +737,19 @@ function ComposePage({
                   <ToolbarButton active={notepadEditor.isActive("underline")} onClick={() => notepadEditor.chain().focus().toggleUnderline().run()} title="Underline (Ctrl+U)"><span style={{ fontWeight: 500, fontSize: 13, textDecoration: "underline" }}>U</span></ToolbarButton>
                   <ColorPicker editor={notepadEditor} />
                   <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+                  <ToolbarButton active={notepadEditor.isActive("bulletList")} onClick={() => notepadEditor.chain().focus().toggleBulletList().run()} title="Bullet list">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" /><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" /></svg>
+                  </ToolbarButton>
+                  <ToolbarButton active={notepadEditor.isActive("orderedList")} onClick={() => notepadEditor.chain().focus().toggleOrderedList().run()} title="Numbered list">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="20" y2="6" /><line x1="10" y1="12" x2="20" y2="12" /><line x1="10" y1="18" x2="20" y2="18" /><text x="2" y="8" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">1</text><text x="2" y="14" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">2</text><text x="2" y="20" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">3</text></svg>
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => { if (notepadEditor.can().sinkListItem("listItem")) notepadEditor.chain().focus().sinkListItem("listItem").run(); }} title="Indent">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="3,8 7,13 3,18" /></svg>
+                  </ToolbarButton>
+                  <ToolbarButton onClick={() => { if (notepadEditor.can().liftListItem("listItem")) notepadEditor.chain().focus().liftListItem("listItem").run(); }} title="Outdent">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="7,8 3,13 7,18" /></svg>
+                  </ToolbarButton>
+                  <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
                   <ToolbarButton onClick={() => notepadEditor.chain().focus().clearNodes().unsetAllMarks().run()} title="Clear formatting">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3" /><path d="M9 20h6" /><path d="M12 4v16" /><line x1="3" y1="21" x2="21" y2="3" /></svg>
                   </ToolbarButton>
@@ -753,7 +764,7 @@ function ComposePage({
 
             {/* Notes — single writing pad with same editor as Composer */}
             <div className="flex-1 min-h-0 notepad-tight" style={{ display: rightTab === "notes" ? "flex" : "none", flexDirection: "column" }}>
-              <RichTextEditor content={notesContent} onChange={setNotesContent} placeholder="Capture ideas, references, or thoughts for this section…" borderless hideToolbar onEditor={setNotepadEditor} />
+              <RichTextEditor content={notesContent} onChange={handleNotesChange} placeholder="Capture ideas, references, or thoughts for this section…" borderless hideToolbar onEditor={setNotepadEditor} />
             </div>
           </div>
         </div>
@@ -816,7 +827,8 @@ function PublishSidebar({
     return sum + stripped.split(/\s+/).filter(Boolean).length;
   }, 0);
 
-  const estimatedPages = Math.max(1, Math.ceil(totalWordCount / 250));
+  // ~225 words per page for standard trade paperback (5.5×8.5 or 6×9 trim)
+  const estimatedPages = Math.max(1, Math.ceil(totalWordCount / 225));
 
   // Status logic
   const hasVersions = bookVersions.length > 0;
@@ -843,17 +855,17 @@ function PublishSidebar({
         <span className="text-[14px] font-semibold" style={{ color: "var(--text-primary)" }}>{bookInfo.title || "Untitled"}</span>
         {bookInfo.subtitle && <p className="text-[12px] mt-0.5" style={{ color: "var(--text-muted)" }}>{bookInfo.subtitle}</p>}
         <div className="mt-3 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Author</span>
-            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.author || "—"}</span>
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-[12px] shrink-0" style={{ color: "var(--text-muted)", paddingTop: 1 }}>Author</span>
+            <span className="text-[13px] font-medium text-right" style={{ color: "var(--text-primary)" }}>{bookInfo.author || "—"}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Category</span>
-            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.genre || "—"}</span>
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-[12px] shrink-0" style={{ color: "var(--text-muted)", paddingTop: 1 }}>Category</span>
+            <span className="text-[13px] font-medium text-right" style={{ color: "var(--text-primary)" }}>{bookInfo.genre || "—"}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[12px]" style={{ color: "var(--text-muted)" }}>Year Published</span>
-            <span className="text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>{bookInfo.year_published || "—"}</span>
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-[12px] shrink-0" style={{ color: "var(--text-muted)", paddingTop: 1 }}>Year Published</span>
+            <span className="text-[13px] font-medium text-right" style={{ color: "var(--text-primary)" }}>{bookInfo.year_published || "—"}</span>
           </div>
         </div>
       </div>
@@ -1600,8 +1612,25 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* Manuscript TOC */}
           {topTab === "Book" && activeStage === "Manuscript" && (
           <nav className="flex flex-col gap-0.5 text-[13px] px-4 pt-5 pb-4">
-            <div className="px-2 pb-2 mb-1">
+            <div className="px-2 pb-2 mb-1 flex items-center justify-between">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Table of Contents</span>
+              <button
+                onClick={() => {
+                  const allExpanded = chapters.every((ch) => expandedChapters[ch.id] ?? true);
+                  const next: Record<string, boolean> = {};
+                  for (const ch of chapters) next[ch.id] = !allExpanded;
+                  setExpandedChapters(next);
+                }}
+                title={chapters.every((ch) => expandedChapters[ch.id] ?? true) ? "Collapse all" : "Expand all"}
+                className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}
+              >
+                {chapters.every((ch) => expandedChapters[ch.id] ?? true) ? (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4,14 12,6 20,14" /><polyline points="4,20 12,12 20,20" /></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4,4 12,12 20,4" /><polyline points="4,10 12,18 20,10" /></svg>
+                )}
+              </button>
             </div>
 
             {/* Prologue */}

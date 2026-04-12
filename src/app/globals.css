@@ -148,13 +148,34 @@ body {
   margin-bottom: 0.75em;
 }
 .notepad-tight .tiptap {
-  line-height: 1.5;
+  line-height: 1.4;
 }
 .notepad-tight .tiptap p {
-  margin-bottom: 0.35em;
+  margin-bottom: 0.2em;
 }
 .tiptap p:last-child {
   margin-bottom: 0;
+}
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.4em;
+  margin-bottom: 0.75em;
+}
+.tiptap ul {
+  list-style-type: disc;
+}
+.tiptap ol {
+  list-style-type: decimal;
+}
+.tiptap li {
+  margin-bottom: 0.15em;
+}
+.tiptap li p {
+  margin-bottom: 0;
+}
+.notepad-tight .tiptap ul,
+.notepad-tight .tiptap ol {
+  margin-bottom: 0.2em;
 }
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
@@ -181,6 +202,23 @@ body {
 }
 .prose-rendered p:empty {
   display: none;
+}
+.prose-rendered ul,
+.prose-rendered ol {
+  padding-left: 1.4em;
+  margin-bottom: 0.75em;
+}
+.prose-rendered ul {
+  list-style-type: disc;
+}
+.prose-rendered ol {
+  list-style-type: decimal;
+}
+.prose-rendered li {
+  margin-bottom: 0.15em;
+}
+.prose-rendered li p {
+  margin-bottom: 0;
 }
 .tiptap hr {
   display: none;

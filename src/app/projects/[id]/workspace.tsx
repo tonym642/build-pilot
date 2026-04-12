@@ -336,7 +336,7 @@ function NotesView({
 
   return (
     <div ref={containerRef} className="flex h-full min-h-0 mobile-col">
-      <div className="flex flex-col min-h-0" style={{ width: aiOpen ? `${divX}%` : "100%" }}>
+      <div className="flex flex-col min-h-0 notepad-tight" style={{ width: aiOpen ? `${divX}%` : "100%" }}>
         <div className="flex-1 min-h-0 px-6 pb-6 mobile-px-4">
           <RichTextEditor content={note.content} onChange={onContentChange} label={note.title} placeholder="Write freely — this is your thinking space…" />
         </div>
@@ -1140,7 +1140,7 @@ export function useWorkspace({
             <span className="text-[14px] font-medium" style={{ color: notesHasActive ? "var(--text-primary)" : "var(--text-tertiary)" }}>Notes</span>
             {data.notes.length > 0 && <span className="shrink-0 text-[11px] ml-1" style={{ color: "var(--text-faint)" }}>({data.notes.length})</span>}
           </button>
-          <button onClick={addNote} title="New note" className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
+          <button onClick={addNote} title="New note" className="shrink-0 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
             <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="2" x2="6" y2="10" /><line x1="2" y1="6" x2="10" y2="6" /></svg>
           </button>
         </div>
