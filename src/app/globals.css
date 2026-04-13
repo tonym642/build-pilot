@@ -242,12 +242,12 @@ body {
 
 .ai-markdown {
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--text-secondary);
 }
 
 .ai-markdown p {
-  margin: 0 0 22px;
+  margin: 0 0 20px;
 }
 
 .ai-markdown p:last-child {
