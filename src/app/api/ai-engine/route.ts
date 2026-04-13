@@ -46,6 +46,9 @@ export async function PUT(req: NextRequest) {
   if (body.mode_instructions && typeof body.mode_instructions === "object") {
     updates.mode_instructions = body.mode_instructions;
   }
+  if (typeof body.structuring_instructions === "string") {
+    updates.structuring_instructions = body.structuring_instructions;
+  }
 
   // Check if a row already exists
   const { data: existing } = await supabase

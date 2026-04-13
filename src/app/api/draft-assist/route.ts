@@ -53,13 +53,14 @@ export async function POST(req: NextRequest) {
     try {
       const { data: row } = await supabase
         .from("ai_engine_settings")
-        .select("global_instruction, mode_instructions")
+        .select("global_instruction, mode_instructions, structuring_instructions")
         .limit(1)
         .maybeSingle();
       if (row) {
         aiEngineConfig = {
           ...EMPTY_AI_ENGINE_CONFIG,
           global: row.global_instruction || "",
+          structuring: row.structuring_instructions || "",
           ...(row.mode_instructions && typeof row.mode_instructions === "object"
             ? Object.fromEntries(
                 (["Book", "App", "Business", "Music"] as ModeKey[])

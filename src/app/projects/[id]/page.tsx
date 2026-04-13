@@ -48,6 +48,49 @@ function cleanManuscriptHtml(html: string): string {
 }
 type Stage = (typeof STAGES)[number];
 
+/**
+ * Parse an AI response into chapters and sections.
+ * Supports formats:
+ *   Chapter 1: Title        Chapter 1 - Title        1. Title
+ *   - Section 1             * Section 1               - Section 1
+ *   - Section 2             * Section 2               - Section 2
+ */
+function parseChapterStructure(text: string): { title: string; sections: string[] }[] {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  const chapters: { title: string; sections: string[] }[] = [];
+  let current: { title: string; sections: string[] } | null = null;
+
+  for (const line of lines) {
+    // Match chapter headers: "Chapter N: Title", "Chapter N - Title", "N. Title", "N: Title"
+    const chapterMatch = line.match(/^(?:chapter\s+)?(\d+)\s*[:.–\-]\s*(.+)/i);
+    if (chapterMatch) {
+      const title = chapterMatch[2].trim();
+      if (title) {
+        current = { title, sections: [] };
+        chapters.push(current);
+        continue;
+      }
+    }
+
+    // Match section lines: "- Title", "* Title", "• Title", "  - Section N: Title"
+    if (current) {
+      const sectionMatch = line.match(/^[\-\*•]\s*(?:section\s+\d+\s*[:.–\-]\s*)?(.+)/i);
+      if (sectionMatch) {
+        const sectionTitle = sectionMatch[1].trim();
+        if (sectionTitle) current.sections.push(sectionTitle);
+        continue;
+      }
+    }
+  }
+
+  // Ensure each chapter has at least one section
+  for (const ch of chapters) {
+    if (ch.sections.length === 0) ch.sections.push("Introduction");
+  }
+
+  return chapters;
+}
+
 /* ─── AI message with metadata ──────────────────────────────── */
 
 type AiMessage = {
@@ -92,19 +135,28 @@ function filterMessages(messages: AiMessage[], filter: AiFilter): AiMessage[] {
 
 /* ─── Data model: chapters are containers, sections are writing units ── */
 
+type SectionStatus = "draft" | "in_progress" | "completed" | "finalized";
+
 type SectionData = {
   id: string;
+  number?: number;
   title: string;
+  summary?: string;
+  status?: SectionStatus;
 };
 
 type ChapterData = {
   id: string;
+  number?: number;
   title: string;
+  summary?: string;
+  status?: SectionStatus;
   sections: SectionData[];
 };
 
 /* ─── Selection state: what's active in the sidebar ─────────── */
 type ActiveSelection =
+  | { type: "structuring" }
   | { type: "book_info" }
   | { type: "prologue" }
   | { type: "epilogue" }
@@ -133,6 +185,10 @@ type BookInfo = {
   primary_language: string;
   target_languages: string;
   synopsis: string;
+  synopsis_approved: boolean;
+  characters: string[];
+  themes: string[];
+  notes: string;
 };
 
 const EMPTY_BOOK_INFO: BookInfo = {
@@ -149,6 +205,10 @@ const EMPTY_BOOK_INFO: BookInfo = {
   primary_language: "",
   target_languages: "",
   synopsis: "",
+  synopsis_approved: false,
+  characters: [],
+  themes: [],
+  notes: "",
 };
 
 /* ─── BookInfoPanel ─────────────────────────────────────────── */
@@ -164,6 +224,8 @@ function BookInfoPanel({
   stage,
   projectCtx,
   workCtx,
+  onSendToSynopsis,
+  onGenerateChapters,
 }: {
   bookInfo: BookInfo;
   onChange: (updated: BookInfo) => void;
@@ -175,10 +237,13 @@ function BookInfoPanel({
   projectCtx?: ProjectContext;
   workCtx?: AiWorkContext;
   projectId: string;
+  onSendToSynopsis?: (text: string) => void;
+  onGenerateChapters?: (text: string) => void;
 }) {
   const [mobileAiOpen, setMobileAiOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const fields: { key: keyof BookInfo; label: string; multiline?: boolean; placeholder?: string }[] = [
+  type BookInfoStringKey = { [K in keyof BookInfo]: BookInfo[K] extends string ? K : never }[keyof BookInfo];
+  const fields: { key: BookInfoStringKey; label: string; multiline?: boolean; placeholder?: string }[] = [
     { key: "title", label: "Title", placeholder: "e.g. Life Basics 101" },
     { key: "subtitle", label: "Subtitle", placeholder: "e.g. A guide to living intentionally" },
     { key: "author", label: "Author", placeholder: "e.g. Tony Medina" },
@@ -299,13 +364,43 @@ function BookInfoPanel({
           <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)", letterSpacing: "-0.01em" }}>Synopsis</h2>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>A detailed overview of your book&rsquo;s narrative, structure, and key themes.</p>
         </div>
-        <div className="flex-1 min-h-0 px-6 pb-6">
+        <div className="flex-1 min-h-0 px-6 pb-3">
           <textarea
             value={bookInfo.synopsis}
-            onChange={(e) => onChange({ ...bookInfo, synopsis: e.target.value })}
+            onChange={(e) => onChange({ ...bookInfo, synopsis: e.target.value, synopsis_approved: false })}
             placeholder="Write your book synopsis here — describe the narrative arc, main themes, character journeys, and how the story unfolds from beginning to end…"
             className="h-full w-full resize-none bg-transparent px-0 py-0 text-[13px] leading-7 text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:outline-none"
           />
+        </div>
+        {/* Synopsis approval */}
+        <div className="shrink-0 px-6 pb-4 flex items-center gap-2">
+          <button
+            onClick={() => onChange({ ...bookInfo, synopsis_approved: !bookInfo.synopsis_approved })}
+            disabled={!bookInfo.synopsis?.trim()}
+            className="flex items-center gap-2 transition-colors"
+            style={{ background: "none", border: "none", cursor: bookInfo.synopsis?.trim() ? "pointer" : "default", padding: 0 }}
+          >
+            <span
+              className="flex items-center justify-center shrink-0"
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: 4,
+                border: bookInfo.synopsis_approved ? "1.5px solid var(--accent-green)" : "1.5px solid var(--border-hover)",
+                background: bookInfo.synopsis_approved ? "rgba(74,222,128,0.12)" : "transparent",
+              }}
+            >
+              {bookInfo.synopsis_approved && (
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="var(--accent-green)" strokeWidth="2" strokeLinecap="round"><polyline points="1.5,5 4,7.5 8.5,2.5" /></svg>
+              )}
+            </span>
+            <span className="text-[11px] font-medium" style={{ color: bookInfo.synopsis_approved ? "var(--accent-green)" : "var(--text-muted)" }}>
+              {bookInfo.synopsis_approved ? "Synopsis Approved" : "Approve Synopsis"}
+            </span>
+          </button>
+          {!bookInfo.synopsis_approved && bookInfo.synopsis?.trim() && (
+            <span className="text-[10px]" style={{ color: "var(--text-faint)" }}>Required before generating chapters</span>
+          )}
         </div>
       </div>
 
@@ -322,7 +417,7 @@ function BookInfoPanel({
       {mobileAiOpen && (
         <div className="desktop-hidden shrink-0 mobile-px-4 pb-4" style={{ minHeight: 300 }}>
           <div className="h-full rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]" style={{ minHeight: 300 }}>
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} />
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} onSendToSynopsis={onSendToSynopsis} onGenerateChapters={onGenerateChapters} />
           </div>
         </div>
       )}
@@ -347,7 +442,7 @@ function BookInfoPanel({
             </button>
           </div>
           <div className="flex-1 min-h-0">
-            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} />
+            <AiPanel messages={aiMessages} onUpdateMessage={onUpdateAiMessage} projectId={projectId} bookTitle={bookInfo.title || "this book"} chapter="book_info" onAddMessage={onAddAiMessage} mode={mode} stage={stage} projectContext={projectCtx} workContext={workCtx} onSendToSynopsis={onSendToSynopsis} onGenerateChapters={onGenerateChapters} />
           </div>
         </div>
       )}
@@ -360,9 +455,13 @@ function BookInfoPanel({
 function AiActionBar({
   message,
   onUpdate,
+  onSendToSynopsis,
+  onGenerateChapters,
 }: {
   message: AiMessage;
   onUpdate: (updated: AiMessage) => void;
+  onSendToSynopsis?: (text: string) => void;
+  onGenerateChapters?: (text: string) => void;
 }) {
   function toggle(field: "is_favorite" | "is_liked" | "is_disliked" | "is_hidden" | "is_deleted") {
     const updated = { ...message, [field]: !message[field] };
@@ -395,6 +494,17 @@ function AiActionBar({
       <button title={message.is_deleted ? "Restore" : "Delete"} className={btnClass} style={{ color: message.is_deleted ? "#ef4444" : inactiveColor }} onMouseEnter={(e) => { if (!message.is_deleted) e.currentTarget.style.color = "var(--text-tertiary)"; }} onMouseLeave={(e) => { if (!message.is_deleted) e.currentTarget.style.color = inactiveColor; }} onClick={() => toggle("is_deleted")}>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
       </button>
+      {/* Structuring-only actions */}
+      {onSendToSynopsis && message.role === "ai" && (
+        <button title="Send to Synopsis" className={btnClass} style={{ color: inactiveColor, marginLeft: 4 }} onMouseEnter={(e) => (e.currentTarget.style.color = "#f59e0b")} onMouseLeave={(e) => (e.currentTarget.style.color = inactiveColor)} onClick={() => onSendToSynopsis(message.text)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
+        </button>
+      )}
+      {onGenerateChapters && message.role === "ai" && (
+        <button title="Generate Chapters & Sections" className={btnClass} style={{ color: inactiveColor, marginLeft: 2 }} onMouseEnter={(e) => (e.currentTarget.style.color = "#4ade80")} onMouseLeave={(e) => (e.currentTarget.style.color = inactiveColor)} onClick={() => onGenerateChapters(message.text)}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+        </button>
+      )}
       <span className="ml-auto text-[10px]" style={{ color: "var(--text-faint)" }}>
         {message.created_at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
       </span>
@@ -408,15 +518,17 @@ function AiPanel({
   messages, onUpdateMessage, projectId, bookTitle, chapter, onAddMessage,
   mode, stage, projectContext, workContext, getSelectedText,
   hideHeader, activeFilter: externalFilter, onFilterChange,
+  onSendToSynopsis, onGenerateChapters, panelTitle,
 }: {
   messages: AiMessage[]; onUpdateMessage: (updated: AiMessage) => void; projectId: string; bookTitle: string; chapter: string; onAddMessage: (message: AiMessage) => void;
   mode?: string; stage?: string; projectContext?: ProjectContext; workContext?: AiWorkContext; getSelectedText?: () => string;
-  /** When true, hides the internal header row (tabs managed externally). */
   hideHeader?: boolean;
-  /** Externally controlled filter — use with hideHeader. */
   activeFilter?: AiFilter;
-  /** Called when internal filter changes — use with hideHeader. */
   onFilterChange?: (filter: AiFilter) => void;
+  onSendToSynopsis?: (text: string) => void;
+  onGenerateChapters?: (text: string) => void;
+  /** Custom title for the panel header */
+  panelTitle?: string;
 }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -489,7 +601,7 @@ function AiPanel({
     <div className="flex h-full flex-col">
       {!hideHeader && (
         <div className="shrink-0 flex items-center px-4 pt-3 pb-2 border-b border-[var(--border-default)]" style={{ height: 46 }}>
-          <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>AI Assistant</span>
+          <span className="text-[12px] font-medium shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>{panelTitle || "AI Assistant"}</span>
           <div className="flex items-center gap-1" style={{ overflowX: "auto" }}>
             {AI_FILTERS.map((f) => (
               <button key={f.key} onClick={() => setActiveFilter(f.key)} className={`rounded px-2 py-1 text-[11px] font-medium transition-colors whitespace-nowrap ${activeFilter === f.key ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>{f.label}</button>
@@ -526,7 +638,7 @@ function AiPanel({
                   <p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
                 </div>
               ) : (
-                <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><AiActionBar message={msg} onUpdate={onUpdateMessage} /></div>
+                <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><AiActionBar message={msg} onUpdate={onUpdateMessage} onSendToSynopsis={onSendToSynopsis} onGenerateChapters={onGenerateChapters} /></div>
               )}
             </div>
           ))}
@@ -769,6 +881,48 @@ function ComposePage({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Structuring Page (full AI assistant) ──────────────────── */
+
+function StructuringPage({
+  aiMessages, onUpdateAiMessage, onAddAiMessage, projectId, bookTitle,
+  mode, stage, projectCtx, workCtx,
+  onSendToSynopsis, onGenerateChapters,
+}: {
+  aiMessages: AiMessage[];
+  onUpdateAiMessage: (updated: AiMessage) => void;
+  onAddAiMessage: (message: AiMessage) => void;
+  projectId: string;
+  bookTitle: string;
+  mode?: string;
+  stage?: string;
+  projectCtx?: ProjectContext;
+  workCtx?: AiWorkContext;
+  onSendToSynopsis?: (text: string) => void;
+  onGenerateChapters?: (text: string) => void;
+}) {
+  return (
+    <div className="flex h-full min-h-0">
+      <div className="flex-1 min-h-0 flex flex-col">
+        <AiPanel
+          messages={aiMessages}
+          onUpdateMessage={onUpdateAiMessage}
+          projectId={projectId}
+          bookTitle={bookTitle}
+          chapter="structuring"
+          onAddMessage={onAddAiMessage}
+          mode={mode}
+          stage={stage}
+          projectContext={projectCtx}
+          workContext={workCtx}
+          onSendToSynopsis={onSendToSynopsis}
+          onGenerateChapters={onGenerateChapters}
+          panelTitle="AI Assistant - Structuring Mode"
+        />
+      </div>
     </div>
   );
 }
@@ -1260,10 +1414,14 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   function handleAddChapter() {
     const id = crypto.randomUUID();
     const sectionId = crypto.randomUUID();
+    const chapterNum = chapters.length + 1;
     const newChapter: ChapterData = {
       id,
+      number: chapterNum,
       title: "Untitled Chapter",
-      sections: [{ id: sectionId, title: "Introduction" }],
+      summary: "",
+      status: "draft",
+      sections: [{ id: sectionId, number: 1, title: "Introduction", summary: "", status: "draft" }],
     };
     setChapters((prev) => [...prev, newChapter]);
     setExpandedChapters((prev) => ({ ...prev, [id]: true }));
@@ -1275,11 +1433,65 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     const sectionId = crypto.randomUUID();
     setChapters((prev) => prev.map((ch) => {
       if (ch.id !== chapterId) return ch;
-      return { ...ch, sections: [...ch.sections, { id: sectionId, title: "Untitled Section" }] };
+      const sectionNum = ch.sections.length + 1;
+      return { ...ch, sections: [...ch.sections, { id: sectionId, number: sectionNum, title: "Untitled Section", summary: "", status: "draft" as SectionStatus }] };
     }));
     setExpandedChapters((prev) => ({ ...prev, [chapterId]: true }));
     setSelection({ type: "section", chapterId, sectionId });
     setAutoFocusId(sectionId);
+  }
+
+  // ─── Structuring actions ─────────────────────────────────────
+  function handleSendToSynopsis(text: string) {
+    if (bookInfo.synopsis?.trim()) {
+      if (!confirm("This will replace the existing synopsis. Continue?")) return;
+    }
+    const updated = { ...bookInfo, synopsis: text, synopsis_approved: false };
+    handleBookInfoChange(updated);
+  }
+
+  function handleGenerateChapters(text: string) {
+    if (!bookInfo.synopsis?.trim()) {
+      alert("Please set a synopsis first before generating chapters.");
+      return;
+    }
+    if (!bookInfo.synopsis_approved) {
+      alert("Please approve the synopsis before generating chapters.\n\nYou can approve it in the Synopsis field on the Book Info page.");
+      return;
+    }
+
+    const parsed = parseChapterStructure(text);
+    if (parsed.length === 0) {
+      alert("Could not parse chapter structure from this response. Expected format:\n\nChapter 1: Title\n- Section 1\n- Section 2\n\nChapter 2: Title\n- Section 1");
+      return;
+    }
+
+    if (chapters.length > 0) {
+      if (!confirm(`This will replace all ${chapters.length} existing chapters. Continue?`)) return;
+    }
+
+    const newChapters: ChapterData[] = parsed.map((ch, chIdx) => ({
+      id: crypto.randomUUID(),
+      number: chIdx + 1,
+      title: ch.title,
+      summary: "",
+      status: "draft" as SectionStatus,
+      sections: ch.sections.map((s, secIdx) => ({
+        id: crypto.randomUUID(),
+        number: secIdx + 1,
+        title: s,
+        summary: "",
+        status: "draft" as SectionStatus,
+      })),
+    }));
+
+    setChapters(newChapters);
+    const expanded: Record<string, boolean> = {};
+    for (const ch of newChapters) expanded[ch.id] = true;
+    setExpandedChapters(expanded);
+    if (newChapters[0]?.sections[0]) {
+      setSelection({ type: "section", chapterId: newChapters[0].id, sectionId: newChapters[0].sections[0].id });
+    }
   }
 
   function handleRenameChapter(chapterId: string, newTitle: string) {
@@ -1423,7 +1635,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   })();
 
   // Resolved AI context for the instruction pipeline
-  const aiProjectCtx = resolveProjectContext(bookInfo, projectName);
+  // Structuring: always include synopsis (it's being worked on)
+  const structuringProjectCtx = resolveProjectContext(bookInfo, projectName);
+  // Compose: only include synopsis if approved, so the writer works from the locked-in version
+  const composeBookInfo = bookInfo.synopsis_approved ? bookInfo : { ...bookInfo, synopsis: "" };
+  const aiProjectCtx = resolveProjectContext(composeBookInfo, projectName);
   const currentChapterTitle = (() => {
     if (selection.type === "chapter" || selection.type === "section") {
       const ch = chapters.find((c) => c.id === selection.chapterId);
@@ -1530,6 +1746,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* Book sidebar content */}
           {topTab === "Book" && activeStage === "Compose" && (
           <nav className="flex flex-col gap-0.5 text-[14px] px-4 pt-5 pb-4">
+            <button onClick={() => setSelection({ type: "structuring" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "structuring" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Structuring</button>
             <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
             <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "prologue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
             <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "epilogue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
@@ -1714,8 +1931,22 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* ─── Workspace Tab ─── */}
           {topTab === "Workspace" && workspace.mainContent}
           {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden pt-6">
-          {/* ─── COMPOSE ─── */}
-          {activeStage === "Compose" && selection.type === "book_info" ? (
+          {/* ─── STRUCTURING ─── */}
+          {activeStage === "Compose" && selection.type === "structuring" ? (
+            <StructuringPage
+              aiMessages={aiMessages["structuring"] ?? []}
+              onUpdateAiMessage={(updated) => handleUpdateAiMessage("structuring", updated)}
+              onAddAiMessage={(msg) => handleAddAiMessage("structuring", msg)}
+              projectId={projectId}
+              bookTitle={bookInfo.title || projectName || "this book"}
+              mode={projectType}
+              stage="structuring"
+              projectCtx={structuringProjectCtx}
+              workCtx={aiWorkCtx}
+              onSendToSynopsis={handleSendToSynopsis}
+              onGenerateChapters={handleGenerateChapters}
+            />
+          ) : activeStage === "Compose" && selection.type === "book_info" ? (
             <BookInfoPanel
               bookInfo={bookInfo}
               onChange={handleBookInfoChange}
@@ -1724,9 +1955,11 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               onAddAiMessage={(msg) => handleAddAiMessage("book_info", msg)}
               projectId={projectId}
               mode={projectType}
-              stage={aiStage}
-              projectCtx={aiProjectCtx}
+              stage="structuring"
+              projectCtx={structuringProjectCtx}
               workCtx={aiWorkCtx}
+              onSendToSynopsis={handleSendToSynopsis}
+              onGenerateChapters={handleGenerateChapters}
             />
           ) : activeStage === "Compose" && isWritableSection ? (
             <ComposePage
