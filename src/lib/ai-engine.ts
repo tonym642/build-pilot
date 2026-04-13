@@ -115,6 +115,8 @@ export function getInstructionStack(
   config: AIEngineConfig,
 ): InstructionStack {
   if (page === "structuring") {
+    const instructions = config.structuring || config.global || "";
+    console.log("STRUCTURING INSTRUCTIONS USED:", instructions);
     return {
       global: config.global || "",
       master: config.structuring || "",
@@ -258,28 +260,13 @@ export function buildAiMessages(opts: {
     messages.push({ role: "system", content: stack.page });
   }
 
-  // 4. Fallback: if no instructions at all, provide a sensible default
-  if (!stack.global && !stack.master && !stack.page) {
-    if (page === "structuring") {
-      messages.push({
-        role: "system",
-        content:
-          "You are a book structuring assistant. Your role is to help the author brainstorm, " +
-          "ask clarifying questions about their vision, develop a synopsis, and generate a chapter " +
-          "and section outline. Do NOT write prose or section content. Focus on structure, planning, " +
-          "and organizing the book's architecture. Ask questions before making assumptions.",
-      });
-    } else {
-      messages.push({
-        role: "system",
-        content:
-          "You are a helpful creative assistant. Be clear, concise, and structured.",
-      });
-    }
-  }
-
-  // ─── Structuring phase enforcement (V1) ─────────────────────
-  if (page === "structuring") {
+  // 4. Structuring mode: use DB instructions as primary prompt
+  if (page === "structuring" && stack.master) {
+    // structuring_instructions from DB is the primary system prompt — already pushed above as stack.master
+    console.log("STRUCTURING PROMPT USED:", stack.master.slice(0, 200) + "...");
+  } else if (page === "structuring" && !stack.master) {
+    // Fallback: no structuring_instructions saved — use hardcoded defaults
+    console.log("STRUCTURING PROMPT USED: (fallback — no DB instructions)");
     const hasApprovedSynopsis = !!projectContext.synopsisApproved;
     const userTurns = (history ?? []).filter((h) => h.role === "user").length;
     const userPromptLower = userPrompt.toLowerCase();
@@ -292,7 +279,6 @@ export function buildAiMessages(opts: {
     const explicitChapterRequest = /\b(generate|create|write|draft|make)\b.*\b(outline|chapters|sections|structure)\b/i.test(userPromptLower);
     const hasSynopsis = !!projectContext.synopsis?.trim();
 
-    // Detect book type from conversation context
     const allText = (history ?? []).map((h) => h.text).join(" ") + " " + userPrompt;
     const fictionSignals = /\b(fiction|novel|story|character|protagonist|antagonist|plot|narrative|scene|dialogue|fantasy|thriller|romance|mystery|sci-fi|horror)\b/i.test(allText);
     const nonfictionSignals = /\b(nonfiction|non-fiction|self-help|guide|how.to|educational|business|memoir|autobiography|textbook|manual|reference|teaching|lessons|framework|methodology|principles)\b/i.test(allText);
@@ -329,7 +315,6 @@ export function buildAiMessages(opts: {
       "Help the user clarify the balance and organize both dimensions.";
 
     if (hasApprovedSynopsis && explicitChapterRequest) {
-      // Phase 6: Chapter/section generation — only after synopsis is approved
       messages.push({
         role: "system",
         content:
@@ -341,7 +326,6 @@ export function buildAiMessages(opts: {
           "Do NOT write prose or section content. Focus on structure only.",
       });
     } else if (explicitSynopsisRequest && userTurns >= 1) {
-      // Phase 4: Synopsis generation — user explicitly requested it after providing material
       messages.push({
         role: "system",
         content:
@@ -353,23 +337,15 @@ export function buildAiMessages(opts: {
           "Do NOT write prose or section content.",
       });
     } else if (userTurns < 1) {
-      // Phase 1: First interaction — determine book type and collect foundation
       messages.push({
         role: "system",
         content:
-          "CRITICAL INSTRUCTION: You are a book structuring assistant in INTAKE phase.\n\n" +
-          "This is for users who ALREADY HAVE a solid book idea and need help organizing, refining, and enhancing it. " +
-          "You are NOT building a book from scratch from a one-line prompt.\n\n" +
-          "Your FIRST task: determine the book type (fiction, nonfiction, or hybrid).\n" +
-          "Then ask 3-5 targeted questions to collect the right foundational material.\n\n" +
-          "If the input clearly suggests fiction:\n" + FICTION_REQUIREMENTS + "\n\n" +
-          "If the input clearly suggests nonfiction:\n" + NONFICTION_REQUIREMENTS + "\n\n" +
-          "If unclear or hybrid:\n" + HYBRID_REQUIREMENTS + "\n\n" +
+          "You are a book structuring assistant.\n\n" +
+          "Ask 3-5 targeted questions to understand the user's book before generating any structure.\n\n" +
           "Do NOT generate any synopsis, outline, or chapter list yet.\n" +
           "Respond ONLY with targeted questions to gather the source material.",
       });
     } else {
-      // Phase 2/3: Ongoing gathering — continue collecting, offer synopsis when ready
       const typeGuide = fictionSignals && !nonfictionSignals
         ? FICTION_REQUIREMENTS
         : nonfictionSignals && !fictionSignals
@@ -386,27 +362,34 @@ export function buildAiMessages(opts: {
       messages.push({
         role: "system",
         content:
-          "You are in Structuring mode, GATHERING phase. The user has provided some information.\n\n" +
+          "You are in Structuring mode. The user has provided some information.\n\n" +
           "Review what has been shared so far against these requirements:\n" + typeGuide + "\n\n" +
           "If important foundation pieces are still missing, ask follow-up questions to fill gaps.\n" +
           "If you have enough material, summarize what you understand and ask if the user wants to generate a synopsis.\n\n" +
-          "Do NOT generate a synopsis unless the user explicitly asks " +
-          "(e.g. 'generate synopsis', 'create synopsis', 'go ahead', 'proceed', 'yes').\n" +
+          "Do NOT generate a synopsis unless the user explicitly asks.\n" +
           "Do NOT generate chapter outlines or section lists — those require an approved synopsis.\n" +
           "Do NOT write prose or section content.\n" +
           "Help organize what the user already has — do NOT invent content." + synopsisHint,
       });
     }
+  } else if (!stack.global && !stack.master && !stack.page) {
+    // Non-structuring fallback
+    messages.push({
+      role: "system",
+      content:
+        "You are a helpful creative assistant. Be clear, concise, and structured.",
+    });
   }
 
-  // Always enforce plain text output
+  // Formatting rules
   messages.push({
     role: "system",
     content:
-      "IMPORTANT: Respond in plain text only. " +
-      "Do not use HTML tags, markdown, bold, italic, or any formatting. " +
-      "Do not wrap text in <p>, <em>, <strong>, <span>, or any other tags. " +
-      "Use line breaks to separate paragraphs. Write clean, natural prose.",
+      "FORMAT: Use markdown for formatting. " +
+      "Use **bold** for emphasis, bullet lists with - for key points, " +
+      "and line breaks between sections. " +
+      "Do NOT use HTML tags (<p>, <em>, <strong>, <span>, etc). " +
+      "Keep formatting clean and readable.",
   });
 
   // 4. Project context

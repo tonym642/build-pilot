@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
 import { useModes } from "@/components/layout/modes-context";
 import { loadAIEngineConfig, type ChatHistoryEntry } from "@/lib/ai-engine";
+import { AiMarkdown } from "@/components/ui/ai-markdown";
 
 /* ─── types ──────────────────────────────────────────────────────── */
 
@@ -264,7 +265,7 @@ function AppAiPanel({
                 </div>
               ) : (
                 <div>
-                  <p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
+                  <AiMarkdown>{msg.text}</AiMarkdown>
                   <AiActionBar message={msg} onUpdate={onUpdateMessage} />
                 </div>
               )}

@@ -56,10 +56,11 @@ export async function POST(req: NextRequest) {
     try {
       const { data: row } = await supabase
         .from("ai_engine_settings")
-        .select("global_instruction, mode_instructions, structuring_instructions")
+        .select("global_instruction, mode_instructions, structuring_instructions, synopsis_instructions, chapter_instructions")
         .limit(1)
         .maybeSingle();
       if (row) {
+        console.log("STRUCTURING INSTRUCTIONS USED:", row.structuring_instructions || "(empty)");
         aiEngineConfig = {
           ...EMPTY_AI_ENGINE_CONFIG,
           global: row.global_instruction || "",

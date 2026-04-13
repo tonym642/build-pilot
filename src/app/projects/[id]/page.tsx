@@ -7,6 +7,7 @@ import { useWorkspace, EMPTY_WORKSPACE, type WorkspaceData } from "./workspace";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
 import { RichTextEditor, ToolbarButton, ColorPicker, type Editor } from "@/components/editor/rich-text-editor";
 import { ThemeToggle } from "@/components/layout/theme-context";
+import { AiMarkdown } from "@/components/ui/ai-markdown";
 import { useModes, type ModeKey } from "@/components/layout/modes-context";
 import {
   loadAIEngineConfig,
@@ -55,31 +56,68 @@ type Stage = (typeof STAGES)[number];
  *   - Section 1             * Section 1               - Section 1
  *   - Section 2             * Section 2               - Section 2
  */
+/** Format chapter label for sidebar: "Chapter 1: Planet Kora" -> "01- Planet Kora" */
+function formatChapterLabel(title: string, index: number): string {
+  const num = String(index + 1).padStart(2, "0");
+  // Strip "Chapter N: " or "Chapter N - " prefix if present
+  const cleaned = title.replace(/^chapter\s+\d+\s*[:.–\-]\s*/i, "").trim();
+  return `${num}- ${cleaned || title}`;
+}
+
 function parseChapterStructure(text: string): { title: string; sections: string[] }[] {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   const chapters: { title: string; sections: string[] }[] = [];
   let current: { title: string; sections: string[] } | null = null;
+  let inKeyBeats = false;
+
+  // Stop markers — anything after these is not chapter data
+  const stopPattern = /^(next\s+step|options:?\s*$|note:\s)/i;
 
   for (const line of lines) {
-    // Match chapter headers: "Chapter N: Title", "Chapter N - Title", "N. Title", "N: Title"
-    const chapterMatch = line.match(/^(?:chapter\s+)?(\d+)\s*[:.–\-]\s*(.+)/i);
+    // Stop parsing if we hit non-chapter content
+    if (stopPattern.test(line)) break;
+
+    // Skip dividers
+    if (/^-{3,}$/.test(line)) continue;
+
+    // Match chapter headers — requires explicit "Chapter" keyword or emoji prefix
+    const cleaned = line.replace(/^[#*\s🎬]+/, "").replace(/\*+$/g, "").trim();
+    const chapterMatch = cleaned.match(/^chapter\s+(\d+)\s*[:.–\-]\s*(.+)/i);
     if (chapterMatch) {
-      const title = chapterMatch[2].trim();
+      const num = chapterMatch[1];
+      const title = chapterMatch[2].replace(/\*+/g, "").trim();
       if (title) {
-        current = { title, sections: [] };
+        current = { title: `Chapter ${num}: ${title}`, sections: [] };
         chapters.push(current);
+        inKeyBeats = false;
         continue;
       }
     }
 
-    // Match section lines: "- Title", "* Title", "• Title", "  - Section N: Title"
-    if (current) {
-      const sectionMatch = line.match(/^[\-\*•]\s*(?:section\s+\d+\s*[:.–\-]\s*)?(.+)/i);
+    if (!current) continue;
+
+    // Detect sub-headers like "**🔹 Key Beats**" — only capture bullets under Key Beats
+    const subHeader = line.replace(/^[\*#🔹\s]+/, "").replace(/\*+$/g, "").trim().toLowerCase();
+    if (/^(purpose|key beats|emotional|conflict|cinematic|tone|setting)/i.test(subHeader)) {
+      inKeyBeats = /key beats/i.test(subHeader);
+      continue;
+    }
+
+    // Match section/bullet lines — only from Key Beats blocks
+    if (inKeyBeats) {
+      const sectionMatch = line.match(/^[\-\*•]\s*(.+)/);
       if (sectionMatch) {
-        const sectionTitle = sectionMatch[1].trim();
+        const sectionTitle = sectionMatch[1].replace(/\*+/g, "").trim();
         if (sectionTitle) current.sections.push(sectionTitle);
         continue;
       }
+    }
+
+    // Also match traditional "- Section N: Title" format anywhere
+    const traditionalSection = line.match(/^[\-\*•]\s*section\s+\d+\s*[:.–\-]\s*(.+)/i);
+    if (traditionalSection) {
+      const sectionTitle = traditionalSection[1].replace(/\*+/g, "").trim();
+      if (sectionTitle) current.sections.push(sectionTitle);
     }
   }
 
@@ -88,6 +126,7 @@ function parseChapterStructure(text: string): { title: string; sections: string[
     if (ch.sections.length === 0) ch.sections.push("Introduction");
   }
 
+  console.log("CHAPTERS PARSED:", chapters.map((c) => `${c.title} (${c.sections.length} sections)`));
   return chapters;
 }
 
@@ -506,6 +545,7 @@ function AiActionBar({
         </button>
       )}
       <span className="ml-auto text-[10px]" style={{ color: "var(--text-faint)" }}>
+        {message.created_at.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
         {message.created_at.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
       </span>
     </div>
@@ -609,16 +649,17 @@ function AiPanel({
           </div>
         </div>
       )}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
-        <div className="flex flex-col gap-5 pb-4">
+      <div className="flex-1 min-h-0 overflow-y-auto py-3">
+        <div className="flex flex-col gap-4 pb-4" style={{ maxWidth: 860, margin: "0 auto", padding: "0 16px" }}>
           {filtered.map((msg) => (
             <div key={msg.id}>
               {msg.role === "user" ? (
-                <div className="flex justify-end items-start gap-1.5 group/user">
+                <div className="flex justify-end items-end gap-1.5 group/user">
+                  <p className="max-w-[85%] rounded-lg px-5 py-3 text-[14px] text-[var(--text-secondary)] whitespace-pre-line" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>{msg.text}</p>
                   <button
                     onClick={() => onUpdateMessage({ ...msg, is_hidden: true })}
                     title="Hide message"
-                    className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
+                    className="shrink-0 mb-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
                     style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "var(--text-tertiary)")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}
@@ -628,17 +669,16 @@ function AiPanel({
                   <button
                     onClick={() => onUpdateMessage({ ...msg, is_deleted: true })}
                     title="Delete message"
-                    className="shrink-0 mt-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
+                    className="shrink-0 mb-2.5 opacity-0 group-hover/user:opacity-100 transition-opacity flex items-center justify-center"
                     style={{ width: 20, height: 20, borderRadius: 4, background: "transparent", border: "none", cursor: "pointer", color: "var(--text-faint)" }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = "#f87171")}
                     onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-faint)")}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
                   </button>
-                  <p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
                 </div>
               ) : (
-                <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><AiActionBar message={msg} onUpdate={onUpdateMessage} onSendToSynopsis={onSendToSynopsis} onGenerateChapters={onGenerateChapters} /></div>
+                <div style={{ padding: "0", marginBottom: 2 }}><AiMarkdown>{msg.text}</AiMarkdown><AiActionBar message={msg} onUpdate={onUpdateMessage} onSendToSynopsis={onSendToSynopsis} onGenerateChapters={onGenerateChapters} /></div>
               )}
             </div>
           ))}
@@ -656,7 +696,8 @@ function AiPanel({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="shrink-0" style={{ padding: "8px 14px 10px", borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
+      <div className="shrink-0" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
+        <div style={{ maxWidth: 860, margin: "0 auto", padding: "10px 16px 12px" }}>
         <div
           className="flex items-end gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
           style={{ background: "var(--surface-2)", border: "1px solid var(--border-default)", borderRadius: 20, padding: "3px 8px 3px 12px" }}
@@ -698,6 +739,7 @@ function AiPanel({
               ↑
             </button>
           )}
+        </div>
         </div>
       </div>
     </div>
@@ -905,7 +947,7 @@ function StructuringPage({
   onGenerateChapters?: (text: string) => void;
 }) {
   return (
-    <div className="flex h-full min-h-0">
+    <div className="flex flex-1 min-h-0">
       <div className="flex-1 min-h-0 flex flex-col">
         <AiPanel
           messages={aiMessages}
@@ -1462,7 +1504,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
 
     const parsed = parseChapterStructure(text);
     if (parsed.length === 0) {
-      alert("Could not parse chapter structure from this response. Expected format:\n\nChapter 1: Title\n- Section 1\n- Section 2\n\nChapter 2: Title\n- Section 1");
+      alert("No chapters found in this response.\n\nMake sure the AI response contains chapters in this format:\n\nChapter 1: Title\nChapter 2: Title\n\nTip: Ask the AI to \"generate chapter outline\" first, then click this button on that response.");
       return;
     }
 
@@ -1754,12 +1796,33 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             {/* Chapters */}
             <div className="mt-6 mb-1 flex items-center justify-between px-2">
               <span className="text-[12px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
-              <button onClick={handleAddChapter} title="Add chapter" className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" /></svg>
-              </button>
+              <div className="flex items-center gap-1.5">
+                {chapters.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const allExpanded = chapters.every((ch) => expandedChapters[ch.id] ?? false);
+                      const next: Record<string, boolean> = {};
+                      for (const ch of chapters) next[ch.id] = !allExpanded;
+                      setExpandedChapters(next);
+                    }}
+                    title={chapters.every((ch) => expandedChapters[ch.id] ?? false) ? "Collapse all" : "Expand all"}
+                    className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: 2 }}
+                  >
+                    {chapters.every((ch) => expandedChapters[ch.id] ?? false) ? (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4,14 12,6 20,14" /><polyline points="4,20 12,12 20,20" /></svg>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4,4 12,12 20,4" /><polyline points="4,10 12,18 20,10" /></svg>
+                    )}
+                  </button>
+                )}
+                <button onClick={handleAddChapter} title="Add chapter" className="text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="1" x2="6" y2="11" /><line x1="1" y1="6" x2="11" y2="6" /></svg>
+                </button>
+              </div>
             </div>
 
-            {chapters.map((ch) => {
+            {chapters.map((ch, chIdx) => {
               const isExpanded = expandedChapters[ch.id] ?? false;
               const isChapterActive = selection.type === "chapter" && selection.chapterId === ch.id;
               const isChildActive = selection.type === "section" && selection.chapterId === ch.id;
@@ -1771,13 +1834,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
                     </button>
                     <button onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))} className={`flex-1 rounded px-1 py-1.5 text-left min-w-0 transition-colors flex items-baseline ${isChapterActive || isChildActive ? "" : ""}`}>
-                      <InlineTitle
-                        value={ch.title}
-                        onChange={(v) => handleRenameChapter(ch.id, v)}
-                        autoFocus={autoFocusId === ch.id}
+                      <span
                         className="text-[14px] font-medium min-w-0"
-                        style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 1 auto" }}
-                      />
+                        style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 1 auto", display: "block" }}
+                      >
+                        {formatChapterLabel(ch.title, chIdx)}
+                      </span>
                       {ch.sections.length > 0 && (
                         <span className="shrink-0 text-[11px] ml-1" style={{ color: "var(--text-faint)" }}>({ch.sections.length})</span>
                       )}
@@ -1861,7 +1923,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             )}
 
             {/* Chapters + sections */}
-            {chapters.map((ch) => {
+            {chapters.map((ch, chIdx) => {
               const sectionsWithContent = ch.sections.filter((sec) => hasContent(composeTexts[sec.id] ?? ""));
               if (sectionsWithContent.length === 0) return null;
               const isExpanded = expandedChapters[ch.id] ?? true;
@@ -1880,7 +1942,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       className="flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] transition-colors min-w-0"
                       style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                     >
-                      {ch.title}
+                      {formatChapterLabel(ch.title, chIdx)}
                     </button>
                   </div>
                   {isExpanded && (
@@ -1930,7 +1992,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           )}
           {/* ─── Workspace Tab ─── */}
           {topTab === "Workspace" && workspace.mainContent}
-          {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden pt-6">
+          {topTab === "Book" && <div className="flex-1 min-h-0 overflow-hidden flex flex-col pt-6">
           {/* ─── STRUCTURING ─── */}
           {activeStage === "Compose" && selection.type === "structuring" ? (
             <StructuringPage

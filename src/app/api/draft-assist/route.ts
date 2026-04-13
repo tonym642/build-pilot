@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     try {
       const { data: row } = await supabase
         .from("ai_engine_settings")
-        .select("global_instruction, mode_instructions, structuring_instructions")
+        .select("global_instruction, mode_instructions, structuring_instructions, synopsis_instructions, chapter_instructions")
         .limit(1)
         .maybeSingle();
       if (row) {
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
   };
 
   // Build instruction-grounded prompt with action
-  const actionPrompt = `${ACTION_INSTRUCTIONS[action]}\n\nRespond in plain text only. Do not use markdown, bold, italic, or bullet points. Write clean natural prose.\n\nText to ${action}:\n${content}`;
+  const actionPrompt = `${ACTION_INSTRUCTIONS[action]}\n\nWrite clean natural prose. Do not use HTML tags.\n\nText to ${action}:\n${content}`;
 
   const aiMessages = buildAiMessages({
     mode,

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { chunkText, ensureChunks, countWords, type LibraryChunk, type AnalysisStatus } from "@/lib/chunking";
 import { loadAIEngineConfig } from "@/lib/ai-engine";
+import { AiMarkdown } from "@/components/ui/ai-markdown";
 
 /* ─── Types ────────────────────────────────────────────────── */
 
@@ -245,7 +246,7 @@ function WsAiPanel({
                   <p className="max-w-[85%] rounded-lg bg-[var(--overlay-active)] px-4 py-2.5 text-[13px] text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p>
                 </div>
               ) : (
-                <div><p className="text-[13px] leading-relaxed text-[var(--text-secondary)] whitespace-pre-line">{msg.text}</p><WsActionBar message={msg} onUpdate={onUpdateMessage} /></div>
+                <div><AiMarkdown>{msg.text}</AiMarkdown><WsActionBar message={msg} onUpdate={onUpdateMessage} /></div>
               )}
             </div>
           ))}

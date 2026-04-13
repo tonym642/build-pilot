@@ -20,6 +20,9 @@ export async function GET() {
   if (!data) {
     return NextResponse.json({
       global_instruction: "",
+      structuring_instructions: "",
+      synopsis_instructions: "",
+      chapter_instructions: "",
       mode_instructions: {},
     });
   }
@@ -30,7 +33,6 @@ export async function GET() {
 /**
  * PUT /api/ai-engine
  * Upserts the ai_engine_settings row.
- * Body: { global_instruction?: string, mode_instructions?: object }
  */
 export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -38,6 +40,9 @@ export async function PUT(req: NextRequest) {
   if (!body) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
+
+  const userId: string | null = typeof body.user_id === "string" ? body.user_id : null;
+  const projectId: string | null = typeof body.project_id === "string" ? body.project_id : null;
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof body.global_instruction === "string") {
@@ -48,6 +53,12 @@ export async function PUT(req: NextRequest) {
   }
   if (typeof body.structuring_instructions === "string") {
     updates.structuring_instructions = body.structuring_instructions;
+  }
+  if (typeof body.synopsis_instructions === "string") {
+    updates.synopsis_instructions = body.synopsis_instructions;
+  }
+  if (typeof body.chapter_instructions === "string") {
+    updates.chapter_instructions = body.chapter_instructions;
   }
 
   // Check if a row already exists
@@ -72,10 +83,16 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(data);
   } else {
     // Insert a new row
+    console.log("INSERT ai_engine_settings", { userId, projectId });
     const { data, error } = await supabase
       .from("ai_engine_settings")
       .insert([{
+        user_id: userId,
+        project_id: projectId,
         global_instruction: updates.global_instruction ?? "",
+        structuring_instructions: updates.structuring_instructions ?? "",
+        synopsis_instructions: updates.synopsis_instructions ?? "",
+        chapter_instructions: updates.chapter_instructions ?? "",
         mode_instructions: updates.mode_instructions ?? {},
       }])
       .select()
