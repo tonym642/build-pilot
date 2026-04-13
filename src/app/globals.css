@@ -140,12 +140,12 @@ body {
   outline: none;
   min-height: 100%;
   padding: 16px 20px;
-  font-size: 13px;
-  line-height: 1.85;
+  font-size: 15px;
+  line-height: 1.65;
   color: var(--text-secondary);
 }
 .tiptap p {
-  margin-bottom: 0.75em;
+  margin-bottom: 20px;
 }
 .notepad-tight .tiptap {
   line-height: 1.4;
@@ -187,12 +187,12 @@ body {
 
 /* Rendered HTML content in Manuscript / Publish */
 .prose-rendered {
-  font-size: 13px;
-  line-height: 1.85;
+  font-size: 15px;
+  line-height: 1.65;
   color: var(--text-secondary);
 }
 .prose-rendered p {
-  margin-bottom: 0.75em;
+  margin-bottom: 20px;
 }
 .prose-rendered p:last-child {
   margin-bottom: 0;
