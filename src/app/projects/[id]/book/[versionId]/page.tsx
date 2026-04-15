@@ -88,6 +88,9 @@ export default function FinalEditPage({
   // Sidebar chapter expand/collapse
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
 
+  // Mobile view tab
+  const [mobilePanel, setMobilePanel] = useState<"sections" | "editor" | "ai">("editor");
+
   const backRoute = `/projects/${projectId}?stage=Publish`;
 
   // Load version and sections
@@ -147,6 +150,8 @@ export default function FinalEditPage({
     // Determine review state from persisted is_reviewed
     const section = sections.find((s) => s.id === sectionId);
     setReviewState(section?.is_reviewed ? "loaded" : "not_started");
+    // Auto-switch to editor on mobile
+    setMobilePanel("editor");
     console.log("[Publish Nav] section:", sectionId, "index:", sections.findIndex((s) => s.id === sectionId));
   }
 
@@ -443,18 +448,18 @@ export default function FinalEditPage({
     <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* Header */}
       <div className="shrink-0 border-b border-[var(--border-default)]" style={{ background: "var(--surface-1)", borderColor: "var(--border-subtle)" }}>
-        <div className="flex items-center justify-between px-8 py-3">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between px-8 py-3 mobile-px-4">
+          <div className="flex items-center gap-4 mobile-gap-2 min-w-0">
             <Link
               href={backRoute}
-              className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)]"
+              className="shrink-0 rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-[13px] text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)]"
             >
               &larr; Back
             </Link>
-            <h1 className="text-[13px] font-semibold text-[var(--text-primary)]">
+            <h1 className="text-[13px] font-semibold text-[var(--text-primary)] truncate">
               Version {version.version_number} &mdash; Final Edit
             </h1>
-            <span className="text-xs text-[var(--text-muted)]">
+            <span className="text-xs text-[var(--text-muted)] mobile-hidden shrink-0">
               {new Date(version.created_at).toLocaleString("en-US", {
                 month: "short",
                 day: "numeric",
@@ -464,8 +469,8 @@ export default function FinalEditPage({
               })}
             </span>
           </div>
-          <div className="flex items-center gap-4">
-            <p className="text-xs text-[var(--text-muted)]">
+          <div className="flex items-center gap-4 shrink-0">
+            <p className="text-xs text-[var(--text-muted)] mobile-hidden">
               {finalizedCount} of {totalSections} finalized &bull; {reviewedCount} of {totalSections} reviewed
             </p>
             {finalizedCount === totalSections && totalSections > 0 && (
@@ -491,12 +496,35 @@ export default function FinalEditPage({
             style={{ width: `${progressPercent}%` }}
           />
         </div>
+
+        {/* Mobile tab switcher */}
+        <div className="desktop-hidden flex" style={{ borderTop: "1px solid var(--border-subtle)" }}>
+          {([["sections", "Sections"], ["editor", "Editor"], ["ai", "AI Proofing"]] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setMobilePanel(key)}
+              className="flex-1 py-2 text-[12px] font-medium transition-colors"
+              style={{
+                color: mobilePanel === key ? "var(--text-primary)" : "var(--text-muted)",
+                background: "none",
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
+                borderBottomWidth: 2,
+                borderBottomStyle: "solid",
+                borderBottomColor: mobilePanel === key ? "var(--accent-blue, #5a9af5)" : "transparent",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Body */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Left sidebar — section nav */}
-        <aside className="shrink-0 border-r border-[var(--border-default)] overflow-y-auto" style={{ width: 280, background: "var(--surface-1)" }}>
+        <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto mobile-panel-full${mobilePanel !== "sections" ? " mobile-hidden" : ""}`} style={{ width: 280, background: "var(--surface-1)" }}>
           <nav className="flex flex-col gap-0.5 text-[13px] px-4 pt-5 pb-4">
             <div className="px-2 pb-2 mb-1">
               <span className="text-[11px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Sections</span>
@@ -602,24 +630,24 @@ export default function FinalEditPage({
         </aside>
 
         {/* Center: editable content */}
-        <div className="w-1/2 min-w-0 overflow-y-auto scrollbar-none" style={{ scrollbarWidth: "none" }}>
+        <div className={`w-1/2 min-w-0 overflow-y-auto scrollbar-none mobile-panel-full${mobilePanel !== "editor" ? " mobile-hidden" : ""}`} style={{ scrollbarWidth: "none" }}>
           {activeSectionData ? (
-            <div className="px-6 py-8">
+            <div className="px-6 py-8 mobile-px-4">
               {/* Section header */}
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-xl font-semibold text-[var(--text-primary)]">
+              <div className="flex items-center justify-between mb-2 mobile-stack mobile-gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <h2 className="text-xl font-semibold text-[var(--text-primary)] truncate" style={{ fontSize: "clamp(14px, 4vw, 20px)" }}>
                     {activeSectionData.section_title}
                   </h2>
                   {activeSectionData.is_finalized && (
-                    <span className="rounded bg-green-500/15 px-2 py-0.5 text-xs text-green-400">
+                    <span className="shrink-0 rounded bg-green-500/15 px-2 py-0.5 text-xs text-green-400">
                       Finalized
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs text-[var(--text-faint)]">
-                    Section {activeIndex + 1} of {totalSections}
+                    {activeIndex + 1}/{totalSections}
                   </span>
                   {!activeSectionData.is_finalized && activeSectionData.section_type !== "info" && (
                     <button
@@ -627,7 +655,7 @@ export default function FinalEditPage({
                       disabled={reviewing}
                       className="rounded-lg bg-[rgba(255,255,255,0.06)] px-3 py-1.5 text-xs text-[var(--text-secondary)] transition-colors hover:bg-[rgba(255,255,255,0.1)] hover:text-[var(--text-primary)] disabled:opacity-40"
                     >
-                      {reviewing ? "Reviewing..." : "Review Section"}
+                      {reviewing ? "Reviewing..." : "Review"}
                     </button>
                   )}
                   {!activeSectionData.is_finalized && (
@@ -635,7 +663,7 @@ export default function FinalEditPage({
                       onClick={handleFinalizeClick}
                       className="rounded-lg bg-green-600/20 px-3 py-1.5 text-xs text-green-400 transition-colors hover:bg-green-600/30"
                     >
-                      Finalize Section
+                      Finalize
                     </button>
                   )}
                 </div>
@@ -696,7 +724,7 @@ export default function FinalEditPage({
         </div>
 
         {/* Right: AI proofing panel */}
-        <aside className="w-1/2 shrink-0 border-l border-[var(--border-default)] flex flex-col overflow-hidden" style={{ background: "var(--surface-1)" }}>
+        <aside className={`w-1/2 shrink-0 border-l border-[var(--border-default)] flex flex-col overflow-hidden mobile-panel-full${mobilePanel !== "ai" ? " mobile-hidden" : ""}`} style={{ background: "var(--surface-1)" }}>
           <div className="flex-1 overflow-y-auto px-4 py-4">
             {reviewing ? (
               <div>

@@ -120,6 +120,27 @@ html {
     width: 100% !important;
     flex-shrink: 0 !important;
   }
+  /* Final Edit page: make panels full-width on mobile */
+  .mobile-panel-full {
+    width: 100% !important;
+    flex: 1 1 0% !important;
+  }
+  /* Force visible scrollbar on mobile */
+  .mobile-show-scrollbar {
+    overflow-y: scroll !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mobile-show-scrollbar::-webkit-scrollbar {
+    width: 6px !important;
+    display: block !important;
+  }
+  .mobile-show-scrollbar::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  .mobile-show-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 3px !important;
+  }
 }
 @media (min-width: 769px) {
   .desktop-hidden {
