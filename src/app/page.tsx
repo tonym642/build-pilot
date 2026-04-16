@@ -76,6 +76,7 @@ function HomePageContent() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<string>("Book");
   const [creating, setCreating] = useState(false);
@@ -179,19 +180,41 @@ function HomePageContent() {
           </h1>
           <p className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>Manage your builds</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="text-xs font-semibold text-white whitespace-nowrap"
-          style={{
-            height: 30,
-            padding: "0 12px",
-            background: "linear-gradient(180deg, #5a9af5, #4a88e0)",
-            border: "none",
-            borderRadius: 6,
-          }}
-        >
-          + New Project
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowHelp(true)}
+            className="flex items-center justify-center transition-colors"
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: "50%",
+              border: "1px solid var(--border-default)",
+              background: "transparent",
+              color: "var(--text-muted)",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-default)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            title="Help"
+          >
+            ?
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="text-xs font-semibold text-white whitespace-nowrap"
+            style={{
+              height: 30,
+              padding: "0 12px",
+              background: "linear-gradient(180deg, #5a9af5, #4a88e0)",
+              border: "none",
+              borderRadius: 6,
+            }}
+          >
+            + New Project
+          </button>
+        </div>
       </div>
 
       {/* Projects card */}
@@ -468,6 +491,89 @@ function HomePageContent() {
                 }}
               >
                 {creating ? "Creating..." : "Create Project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Help modal */}
+      {showHelp && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowHelp(false)}
+        >
+          <div
+            className="w-full"
+            style={{
+              maxWidth: 480,
+              margin: "0 16px",
+              background: "var(--surface-2)",
+              border: "1px solid var(--border-default)",
+              borderRadius: 12,
+              padding: "24px 28px",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[16px] font-semibold" style={{ color: "var(--text-primary)" }}>Welcome to Build Pilot</h2>
+              <button
+                onClick={() => setShowHelp(false)}
+                className="flex items-center justify-center transition-colors"
+                style={{ width: 24, height: 24, borderRadius: 6, background: "none", border: "none", color: "var(--text-faint)", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-faint)"; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </div>
+
+            <p className="text-[13px] leading-relaxed mb-4" style={{ color: "var(--text-secondary)" }}>
+              This is your <strong style={{ color: "var(--text-primary)" }}>Projects</strong> dashboard. Here you can create, manage, and organize all your builds in one place.
+            </p>
+
+            <div className="flex flex-col gap-3 mb-5">
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: "rgba(90,154,245,0.15)", color: "#5a9af5", fontSize: 11, fontWeight: 700 }}>1</span>
+                <p className="text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+                  Click <strong style={{ color: "var(--text-secondary)" }}>+ New Project</strong> to create a book, app, or other project type.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: "rgba(90,154,245,0.15)", color: "#5a9af5", fontSize: 11, fontWeight: 700 }}>2</span>
+                <p className="text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+                  Click on any project to open it. For books, you'll start by filling in <strong style={{ color: "var(--text-secondary)" }}>Book Info</strong>, then build your <strong style={{ color: "var(--text-secondary)" }}>Storyline</strong> and <strong style={{ color: "var(--text-secondary)" }}>Synopsis</strong>.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: "rgba(90,154,245,0.15)", color: "#5a9af5", fontSize: 11, fontWeight: 700 }}>3</span>
+                <p className="text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+                  Use the <strong style={{ color: "var(--text-secondary)" }}>AI Assistant</strong> on every page to brainstorm, get feedback, and refine your work.
+                </p>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 flex items-center justify-center rounded-full" style={{ width: 22, height: 22, background: "rgba(90,154,245,0.15)", color: "#5a9af5", fontSize: 11, fontWeight: 700 }}>4</span>
+                <p className="text-[13px]" style={{ color: "var(--text-tertiary)" }}>
+                  When your chapters are written, go to <strong style={{ color: "var(--text-secondary)" }}>Manuscript</strong> to preview, then <strong style={{ color: "var(--text-secondary)" }}>Publish</strong> to finalize and export.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowHelp(false)}
+                className="text-[13px] font-medium text-white"
+                style={{
+                  height: 32,
+                  padding: "0 16px",
+                  background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+                  border: "none",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                }}
+              >
+                Got it
               </button>
             </div>
           </div>

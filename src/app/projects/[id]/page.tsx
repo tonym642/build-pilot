@@ -197,13 +197,17 @@ type ActiveSelection =
   | { type: "storyline" }
   | { type: "synopsis" }
   | { type: "prologue" }
+  | { type: "prologue_section"; sectionId: string }
   | { type: "epilogue" }
+  | { type: "epilogue_section"; sectionId: string }
   | { type: "chapter"; chapterId: string }
   | { type: "section"; chapterId: string; sectionId: string };
 
 function selectionKey(sel: ActiveSelection): string {
   if (sel.type === "section") return `section::${sel.sectionId}`;
   if (sel.type === "chapter") return `chapter::${sel.chapterId}`;
+  if (sel.type === "prologue_section") return `prologue_section::${sel.sectionId}`;
+  if (sel.type === "epilogue_section") return `epilogue_section::${sel.sectionId}`;
   return sel.type;
 }
 
@@ -228,6 +232,8 @@ type BookInfo = {
   characters: string[];
   themes: string[];
   notes: string;
+  prologue_sections: SectionData[];
+  epilogue_sections: SectionData[];
 };
 
 const EMPTY_BOOK_INFO: BookInfo = {
@@ -246,6 +252,8 @@ const EMPTY_BOOK_INFO: BookInfo = {
   storyline: "",
   synopsis: "",
   synopsis_approved: false,
+  prologue_sections: [],
+  epilogue_sections: [],
   characters: [],
   themes: [],
   notes: "",
@@ -1441,6 +1449,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
+  const [setupExpanded, setSetupExpanded] = useState(false);
   const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [showAdaptModal, setShowAdaptModal] = useState(false);
@@ -1638,6 +1647,43 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     setAutoFocusId(sectionId);
   }
 
+  // ─── Prologue / Epilogue section management ─────────────────
+  function handleAddPrologueSection() {
+    const sectionId = crypto.randomUUID();
+    const sections = [...(bookInfo.prologue_sections ?? []), { id: sectionId, title: "Untitled Section" }];
+    handleBookInfoChange({ ...bookInfo, prologue_sections: sections });
+    setExpandedChapters((prev) => ({ ...prev, prologue: true }));
+    setSelection({ type: "prologue_section", sectionId });
+    setAutoFocusId(sectionId);
+  }
+
+  function handleAddEpilogueSection() {
+    const sectionId = crypto.randomUUID();
+    const sections = [...(bookInfo.epilogue_sections ?? []), { id: sectionId, title: "Untitled Section" }];
+    handleBookInfoChange({ ...bookInfo, epilogue_sections: sections });
+    setExpandedChapters((prev) => ({ ...prev, epilogue: true }));
+    setSelection({ type: "epilogue_section", sectionId });
+    setAutoFocusId(sectionId);
+  }
+
+  function handleRenamePrologueSection(sectionId: string, newTitle: string) {
+    handleBookInfoChange({ ...bookInfo, prologue_sections: (bookInfo.prologue_sections ?? []).map((s) => s.id === sectionId ? { ...s, title: newTitle } : s) });
+  }
+
+  function handleRenameEpilogueSection(sectionId: string, newTitle: string) {
+    handleBookInfoChange({ ...bookInfo, epilogue_sections: (bookInfo.epilogue_sections ?? []).map((s) => s.id === sectionId ? { ...s, title: newTitle } : s) });
+  }
+
+  function handleRemovePrologueSection(sectionId: string) {
+    handleBookInfoChange({ ...bookInfo, prologue_sections: (bookInfo.prologue_sections ?? []).filter((s) => s.id !== sectionId) });
+    if (selection.type === "prologue_section" && selection.sectionId === sectionId) setSelection({ type: "prologue" });
+  }
+
+  function handleRemoveEpilogueSection(sectionId: string) {
+    handleBookInfoChange({ ...bookInfo, epilogue_sections: (bookInfo.epilogue_sections ?? []).filter((s) => s.id !== sectionId) });
+    if (selection.type === "epilogue_section" && selection.sectionId === sectionId) setSelection({ type: "epilogue" });
+  }
+
   // ─── Structuring actions ─────────────────────────────────────
   function handleSendToSynopsis(text: string) {
     if (bookInfo.synopsis?.trim()) {
@@ -1818,12 +1864,27 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   // ─── Derive what to render ─────────────────────────────────
 
   const activeKey = selectionKey(selection);
-  const isWritableSection = selection.type === "section" || selection.type === "prologue" || selection.type === "epilogue";
-  const composeKey = selection.type === "section" ? selection.sectionId : selection.type === "prologue" ? "prologue" : selection.type === "epilogue" ? "epilogue" : "";
+  const isWritableSection = selection.type === "section" || selection.type === "prologue" || selection.type === "epilogue" || selection.type === "prologue_section" || selection.type === "epilogue_section";
+  const composeKey = (() => {
+    if (selection.type === "section") return selection.sectionId;
+    if (selection.type === "prologue") return "prologue";
+    if (selection.type === "epilogue") return "epilogue";
+    if (selection.type === "prologue_section") return selection.sectionId;
+    if (selection.type === "epilogue_section") return selection.sectionId;
+    return "";
+  })();
 
   const currentSectionTitle = (() => {
     if (selection.type === "prologue") return "Prologue";
     if (selection.type === "epilogue") return "Epilogue";
+    if (selection.type === "prologue_section") {
+      const sec = bookInfo.prologue_sections?.find((s) => s.id === selection.sectionId);
+      return sec?.title ?? "Untitled Section";
+    }
+    if (selection.type === "epilogue_section") {
+      const sec = bookInfo.epilogue_sections?.find((s) => s.id === selection.sectionId);
+      return sec?.title ?? "Untitled Section";
+    }
     if (selection.type === "section") {
       const ch = chapters.find((c) => c.id === selection.chapterId);
       const sec = ch?.sections.find((s) => s.id === selection.sectionId);
@@ -1944,23 +2005,41 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           {/* Book sidebar content */}
           {topTab === "Book" && activeStage === "Compose" && (
           <nav className="flex flex-col gap-0.5 text-[14px] px-4 pt-5 pb-4">
-            <button onClick={() => setSelection({ type: "structuring" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "structuring" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Structuring</button>
-
-            <div className="my-2 mx-2" style={{ borderTop: "1px solid var(--border-subtle)" }} />
-
-            <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Book Info</button>
-            <button onClick={() => setSelection({ type: "storyline" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "storyline" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Storyline</button>
-            <button onClick={() => setSelection({ type: "synopsis" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "synopsis" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Synopsis</button>
-
-            <div className="my-2 mx-2" style={{ borderTop: "1px solid var(--border-subtle)" }} />
-
-            <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "prologue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Prologue</button>
-            <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1.5 text-left text-[14px] transition-colors ${selection.type === "epilogue" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}>Epilogue</button>
-
-            <div className="my-2 mx-2" style={{ borderTop: "1px solid var(--border-subtle)" }} />
+            {/* ── Setup group (collapsible) ── */}
+            {(() => {
+              const setupTypes = ["structuring", "book_info", "storyline", "synopsis"];
+              const isSetupChildActive = setupTypes.includes(selection.type);
+              return (
+                <div>
+                  <div className="flex items-center">
+                    <button
+                      onClick={() => setSetupExpanded((v) => !v)}
+                      className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                      style={{ width: 16, height: 16 }}
+                    >
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${setupExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
+                    </button>
+                    <button
+                      onClick={() => setSetupExpanded((v) => !v)}
+                      className={`flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium min-w-0 transition-colors ${isSetupChildActive ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`}
+                    >
+                      Setup
+                    </button>
+                  </div>
+                  {setupExpanded && (
+                    <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                      <button onClick={() => setSelection({ type: "structuring" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "structuring" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Structuring</button>
+                      <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Book Info</button>
+                      <button onClick={() => setSelection({ type: "storyline" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "storyline" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Storyline</button>
+                      <button onClick={() => setSelection({ type: "synopsis" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "synopsis" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Synopsis</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Chapters */}
-            <div className="mb-1 flex items-center justify-between px-2">
+            <div className="mt-3 mb-1 flex items-center justify-between px-2">
               <span className="text-[12px] font-semibold uppercase tracking-widest text-[var(--text-faint)]">Chapters</span>
               <div className="flex items-center gap-1.5">
                 {chapters.length > 0 && (
@@ -1987,6 +2066,54 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </button>
               </div>
             </div>
+
+            {/* Prologue — chapter-like expandable */}
+            {(() => {
+              const prologueExpanded = expandedChapters["prologue"] ?? false;
+              const pSections = bookInfo.prologue_sections ?? [];
+              const isPrologueActive = selection.type === "prologue";
+              const isPrologueChildActive = selection.type === "prologue_section";
+              return (
+                <div>
+                  <div className="group flex items-center">
+                    <button onClick={() => setExpandedChapters((prev) => ({ ...prev, prologue: !prev.prologue }))} className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors" style={{ width: 16, height: 16 }}>
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${prologueExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
+                    </button>
+                    <button onClick={() => { setExpandedChapters((prev) => ({ ...prev, prologue: !prev.prologue })); }} className={`flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium min-w-0 transition-colors ${isPrologueActive || isPrologueChildActive ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Prologue
+                    </button>
+                    {pSections.length > 0 && <span className="shrink-0 text-[11px] mr-1" style={{ color: "var(--text-faint)" }}>({pSections.length})</span>}
+                    <button onClick={handleAddPrologueSection} title="Add section" className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="2" x2="6" y2="10" /><line x1="2" y1="6" x2="10" y2="6" /></svg>
+                    </button>
+                  </div>
+                  {prologueExpanded && (
+                    <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                      {/* Main prologue content */}
+                      <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isPrologueActive ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>
+                        <span className="truncate">Main</span>
+                      </button>
+                      {pSections.map((sec) => {
+                        const isActive = selection.type === "prologue_section" && selection.sectionId === sec.id;
+                        return (
+                          <div key={sec.id} className="group/sec flex items-center">
+                            <button onClick={() => setSelection({ type: "prologue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                              <InlineTitle value={sec.title} onChange={(v) => handleRenamePrologueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="w-full text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
+                            </button>
+                            <button onClick={() => handleRemovePrologueSection(sec.id)} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
+                              <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {pSections.length === 0 && (
+                        <button onClick={handleAddPrologueSection} className="px-2 py-1 text-[12px] text-[var(--text-faint)] hover:text-[var(--accent-blue)] transition-colors text-left">+ Add Section</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {chapters.map((ch, chIdx) => {
               const isExpanded = expandedChapters[ch.id] ?? false;
@@ -2050,6 +2177,54 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 </div>
               );
             })}
+
+            {/* Epilogue — chapter-like expandable */}
+            {(() => {
+              const epilogueExpanded = expandedChapters["epilogue"] ?? false;
+              const eSections = bookInfo.epilogue_sections ?? [];
+              const isEpilogueActive = selection.type === "epilogue";
+              const isEpilogueChildActive = selection.type === "epilogue_section";
+              return (
+                <div>
+                  <div className="group flex items-center">
+                    <button onClick={() => setExpandedChapters((prev) => ({ ...prev, epilogue: !prev.epilogue }))} className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors" style={{ width: 16, height: 16 }}>
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${epilogueExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
+                    </button>
+                    <button onClick={() => { setExpandedChapters((prev) => ({ ...prev, epilogue: !prev.epilogue })); }} className={`flex-1 rounded px-1 py-1.5 text-left text-[14px] font-medium min-w-0 transition-colors ${isEpilogueActive || isEpilogueChildActive ? "text-[var(--text-primary)]" : "text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"}`} style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Epilogue
+                    </button>
+                    {eSections.length > 0 && <span className="shrink-0 text-[11px] mr-1" style={{ color: "var(--text-faint)" }}>({eSections.length})</span>}
+                    <button onClick={handleAddEpilogueSection} title="Add section" className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
+                      <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="2" x2="6" y2="10" /><line x1="2" y1="6" x2="10" y2="6" /></svg>
+                    </button>
+                  </div>
+                  {epilogueExpanded && (
+                    <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
+                      {/* Main epilogue content */}
+                      <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isEpilogueActive ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>
+                        <span className="truncate">Main</span>
+                      </button>
+                      {eSections.map((sec) => {
+                        const isActive = selection.type === "epilogue_section" && selection.sectionId === sec.id;
+                        return (
+                          <div key={sec.id} className="group/sec flex items-center">
+                            <button onClick={() => setSelection({ type: "epilogue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                              <InlineTitle value={sec.title} onChange={(v) => handleRenameEpilogueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="w-full text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
+                            </button>
+                            <button onClick={() => handleRemoveEpilogueSection(sec.id)} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
+                              <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {eSections.length === 0 && (
+                        <button onClick={handleAddEpilogueSection} className="px-2 py-1 text-[12px] text-[var(--text-faint)] hover:text-[var(--accent-blue)] transition-colors text-left">+ Add Section</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
           </nav>
           )}
