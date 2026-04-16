@@ -4,7 +4,7 @@ import { createSupabaseMiddleware } from "@/lib/supabase-middleware";
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ["/login", "/login/reset-password", "/auth/callback", "/api/auth"];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public routes

@@ -11,22 +11,17 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type");
   const next = searchParams.get("next") || "/";
 
-  console.log("[auth/callback] params:", { code: code ? "present" : "missing", type, next });
-
   if (code) {
     const supabase = await createSupabaseServer();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    console.log("[auth/callback] exchange result:", { error: error?.message, hasSession: !!data?.session, amr: data?.session?.user?.amr });
-
     if (!error && data.session) {
       // Check if this is a password recovery flow
-      // Supabase sets amr to "recovery" for password reset tokens
+      const user = data.session.user as unknown as Record<string, unknown>;
+      const amr = Array.isArray(user?.amr) ? user.amr : [];
       const isRecovery =
         type === "recovery" ||
-        data.session.user?.recovery_sent_at != null ||
-        (data.session.user?.amr ?? []).some(
-          (a: { method: string }) => a.method === "recovery"
-        );
+        user?.recovery_sent_at != null ||
+        amr.some((a: Record<string, unknown>) => a.method === "recovery");
 
       if (isRecovery) {
         return NextResponse.redirect(new URL("/login/reset-password", request.url));
