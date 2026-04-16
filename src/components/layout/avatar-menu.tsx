@@ -177,10 +177,15 @@ export function AvatarMenu() {
               }
               label="Log out"
               danger
-              onClick={() => {
+              onClick={async () => {
                 setOpen(false);
-                localStorage.clear();
-                window.location.href = "/";
+                const { createBrowserClient } = await import("@supabase/ssr");
+                const supabase = createBrowserClient(
+                  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                await supabase.auth.signOut();
+                window.location.href = "/login";
               }}
             />
           </div>

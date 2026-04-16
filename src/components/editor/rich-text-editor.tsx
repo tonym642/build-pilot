@@ -236,7 +236,7 @@ export function RichTextEditor({
         className="shrink-0 flex items-center border-b border-[var(--border-default)] px-3"
         style={{ height: 46 }}
       >
-        <span className="text-[12px] font-medium pl-1 shrink-0 mr-auto" style={{ color: "var(--text-faint)" }}>
+        <span className="text-[13px] font-medium pl-1 shrink-0 mr-auto" style={{ color: "var(--text-primary)" }}>
           {contextLabel || "Composer"}
         </span>
         <div className="flex items-center gap-0.5">

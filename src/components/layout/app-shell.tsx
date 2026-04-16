@@ -8,6 +8,7 @@ import { SidebarContext } from "./sidebar-context";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isLoginPage = pathname === "/login";
   const isProjectPage = pathname.startsWith("/projects/");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -16,6 +17,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const openMobileNav = useCallback(() => setMobileNavOpen(true), []);
 
   const sidebarCtx = useMemo(() => ({ openMainSidebar: openMobileNav }), [openMobileNav]);
+
+  // Login page renders without shell chrome
+  if (isLoginPage) return <>{children}</>;
 
   return (
     <SidebarContext.Provider value={sidebarCtx}>

@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { withAuth } from "@/lib/api-auth";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
   const { id } = await params;
   const sectionId = req.nextUrl.searchParams.get("section_id");
 
@@ -28,6 +32,10 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
   const { id } = await params;
   const body = await req.json().catch(() => null);
 

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { withAuth } from "@/lib/api-auth";
 
 export async function GET(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const showArchived = req.nextUrl.searchParams.get("archived") === "true";
 
   let query = supabase
     .from("projects")
     .select("*")
+    .eq("user_id", user.id)
     .order("updated_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -26,6 +31,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const body = await req.json().catch(() => null);
 
   if (!body || typeof body.id !== "string") {
@@ -46,6 +55,7 @@ export async function PATCH(req: NextRequest) {
     .from("projects")
     .update(updates)
     .eq("id", body.id)
+    .eq("user_id", user.id)
     .select()
     .maybeSingle();
 
@@ -57,6 +67,10 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const body = await req.json().catch(() => null);
 
   if (!body || typeof body.name !== "string" || !body.name.trim()) {
@@ -66,7 +80,7 @@ export async function POST(req: NextRequest) {
   const name = body.name.trim();
   const type = typeof body.type === "string" ? body.type : "Book";
 
-  const row = { name, type };
+  const row = { name, type, user_id: user.id };
 
   const { data, error } = await supabase
     .from("projects")
@@ -86,8 +100,6 @@ export async function POST(req: NextRequest) {
       { project_id: data.id, type: "chapter", title: "Chapter 1", position: 2 },
       { project_id: data.id, type: "epilogue", title: "Epilogue", position: 3 },
     ];
-    console.log("Creating book structure for project:", data.id);
-    console.log("Structure payload:", structure);
 
     const { error: structureError } = await supabase
       .from("book_structure")
@@ -95,8 +107,6 @@ export async function POST(req: NextRequest) {
 
     if (structureError) {
       console.log("book_structure insert error:", structureError);
-    } else {
-      console.log("book_structure created successfully");
     }
   }
 

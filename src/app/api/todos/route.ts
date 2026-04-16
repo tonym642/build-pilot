@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { withAuth } from "@/lib/api-auth";
 
 export async function GET() {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const { data, error } = await supabase
     .from("todos")
     .select("*")
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -12,6 +17,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const body = await req.json().catch(() => null);
 
   if (!body || typeof body.text !== "string" || !body.text.trim()) {
@@ -20,7 +29,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("todos")
-    .insert([{ text: body.text.trim(), notes: body.notes ?? "", is_complete: false }])
+    .insert([{ text: body.text.trim(), notes: body.notes ?? "", is_complete: false, user_id: user.id }])
     .select()
     .single();
 
@@ -29,6 +38,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const body = await req.json().catch(() => null);
 
   if (!body || typeof body.id !== "string") {
@@ -44,6 +57,7 @@ export async function PUT(req: NextRequest) {
     .from("todos")
     .update(updates)
     .eq("id", body.id)
+    .eq("user_id", user.id)
     .select()
     .maybeSingle();
 
@@ -52,6 +66,10 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { user, supabase } = auth;
+
   const body = await req.json().catch(() => null);
 
   if (!body || !Array.isArray(body.ids) || body.ids.length === 0) {
@@ -61,6 +79,7 @@ export async function DELETE(req: NextRequest) {
   const { error } = await supabase
     .from("todos")
     .delete()
+    .eq("user_id", user.id)
     .in("id", body.ids);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

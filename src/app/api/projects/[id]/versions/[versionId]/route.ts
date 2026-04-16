@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { withAuth } from "@/lib/api-auth";
 
 type Params = { params: Promise<{ id: string; versionId: string }> };
 
 // GET version + sections
 export async function GET(_req: NextRequest, { params }: Params) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
   const { id, versionId } = await params;
 
   const [versionRes, sectionsRes] = await Promise.all([
@@ -37,6 +41,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
 // PATCH a single section's content
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const auth = await withAuth();
+  if ("error" in auth) return auth.error;
+  const { supabase } = auth;
+
   const { id, versionId } = await params;
   const body = await req.json().catch(() => null);
 

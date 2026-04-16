@@ -154,6 +154,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
+      {/* Logout — right after nav */}
+      <div style={{ padding: "16px 8px 0" }}>
+        <button
+          onClick={() => {
+            alert("Sign out clicked");
+          }}
+          className="w-full flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] transition-colors"
+          style={{ color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--overlay-hover)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+          Sign Out
+        </button>
+      </div>
     </aside>
   );
 }
