@@ -35,6 +35,48 @@ const COLORS = [
   { label: "Pink", value: "#ec4899" },
 ];
 
+export function RichTextToolbarButtons({ editor }: { editor: Editor }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      <ToolbarButton active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()} title="Bold (Ctrl+B)">
+        <span style={{ fontWeight: 700, fontSize: 13 }}>B</span>
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()} title="Italic (Ctrl+I)">
+        <span style={{ fontWeight: 500, fontSize: 13, fontStyle: "italic" }}>I</span>
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()} title="Underline (Ctrl+U)">
+        <span style={{ fontWeight: 500, fontSize: 13, textDecoration: "underline" }}>U</span>
+      </ToolbarButton>
+      <ColorPicker editor={editor} />
+      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+      <ToolbarButton active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Numbered list">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="20" y2="6" /><line x1="10" y1="12" x2="20" y2="12" /><line x1="10" y1="18" x2="20" y2="18" /><text x="2" y="8" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">1</text><text x="2" y="14" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">2</text><text x="2" y="20" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">3</text></svg>
+      </ToolbarButton>
+      <ToolbarButton active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()} title="Bullet list">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" /><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" /></svg>
+      </ToolbarButton>
+      <ToolbarButton onClick={() => { if (editor.can().sinkListItem("listItem")) editor.chain().focus().sinkListItem("listItem").run(); }} title="Indent">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="3,8 7,13 3,18" /></svg>
+      </ToolbarButton>
+      <ToolbarButton onClick={() => { if (editor.can().liftListItem("listItem")) editor.chain().focus().liftListItem("listItem").run(); }} title="Outdent">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="7,8 3,13 7,18" /></svg>
+      </ToolbarButton>
+      <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
+      <ToolbarButton onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Horizontal line">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="12" x2="20" y2="12" /></svg>
+      </ToolbarButton>
+      <ToolbarButton onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()} title="Clear formatting">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 7V4h16v3" />
+          <path d="M9 20h6" />
+          <path d="M12 4v16" />
+          <line x1="3" y1="21" x2="21" y2="3" />
+        </svg>
+      </ToolbarButton>
+    </div>
+  );
+}
+
 export function ToolbarButton({
   active,
   onClick,
@@ -169,7 +211,6 @@ export function RichTextEditor({
         blockquote: false,
         codeBlock: false,
         code: false,
-        horizontalRule: false,
       }),
       Underline,
       TextStyle,
@@ -239,83 +280,7 @@ export function RichTextEditor({
         <span className="text-[13px] font-medium pl-1 shrink-0 mr-auto" style={{ color: "var(--text-primary)" }}>
           {contextLabel || "Composer"}
         </span>
-        <div className="flex items-center gap-0.5">
-        <ToolbarButton
-          active={editor.isActive("bold")}
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          title="Bold (Ctrl+B)"
-        >
-          <span style={{ fontWeight: 700, fontSize: 13 }}>B</span>
-        </ToolbarButton>
-
-        <ToolbarButton
-          active={editor.isActive("italic")}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          title="Italic (Ctrl+I)"
-        >
-          <span style={{ fontWeight: 500, fontSize: 13, fontStyle: "italic" }}>I</span>
-        </ToolbarButton>
-
-        <ToolbarButton
-          active={editor.isActive("underline")}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          title="Underline (Ctrl+U)"
-        >
-          <span style={{ fontWeight: 500, fontSize: 13, textDecoration: "underline" }}>U</span>
-        </ToolbarButton>
-
-        <ColorPicker editor={editor} />
-
-        <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
-
-        <ToolbarButton
-          active={editor.isActive("bulletList")}
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          title="Bullet list"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" /><circle cx="4" cy="6" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="12" r="1.5" fill="currentColor" stroke="none" /><circle cx="4" cy="18" r="1.5" fill="currentColor" stroke="none" /></svg>
-        </ToolbarButton>
-
-        <ToolbarButton
-          active={editor.isActive("orderedList")}
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          title="Numbered list"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="10" y1="6" x2="20" y2="6" /><line x1="10" y1="12" x2="20" y2="12" /><line x1="10" y1="18" x2="20" y2="18" /><text x="2" y="8" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">1</text><text x="2" y="14" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">2</text><text x="2" y="20" fontSize="8" fill="currentColor" stroke="none" fontFamily="sans-serif">3</text></svg>
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={() => {
-            if (editor.can().sinkListItem("listItem")) editor.chain().focus().sinkListItem("listItem").run();
-          }}
-          title="Indent"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="3,8 7,13 3,18" /></svg>
-        </ToolbarButton>
-
-        <ToolbarButton
-          onClick={() => {
-            if (editor.can().liftListItem("listItem")) editor.chain().focus().liftListItem("listItem").run();
-          }}
-          title="Outdent"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="4" x2="21" y2="4" /><line x1="11" y1="10" x2="21" y2="10" /><line x1="11" y1="16" x2="21" y2="16" /><line x1="3" y1="22" x2="21" y2="22" /><polyline points="7,8 3,13 7,18" /></svg>
-        </ToolbarButton>
-
-        <div style={{ width: 1, height: 16, background: "var(--border-default)", margin: "0 4px" }} />
-
-        <ToolbarButton
-          onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
-          title="Clear formatting"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 7V4h16v3" />
-            <path d="M9 20h6" />
-            <path d="M12 4v16" />
-            <line x1="3" y1="21" x2="21" y2="3" />
-          </svg>
-        </ToolbarButton>
-        </div>
+        <RichTextToolbarButtons editor={editor} />
       </div>}
 
       {/* Section title + Editor content */}

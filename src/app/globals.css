@@ -218,8 +218,15 @@ body {
 .prose-rendered p:last-child {
   margin-bottom: 0;
 }
+.prose-rendered.prose-tight p {
+  margin-bottom: 0.2em;
+}
 .prose-rendered hr {
-  display: none;
+  border: 0 !important;
+  border-top: 1px solid var(--border-default) !important;
+  display: block !important;
+  height: 0;
+  margin: 1.25em 0;
 }
 .prose-rendered p:empty {
   display: none;
@@ -241,8 +248,19 @@ body {
 .prose-rendered li p {
   margin-bottom: 0;
 }
-.tiptap hr {
-  display: none;
+.tiptap hr,
+.prose-editor hr,
+.ProseMirror hr {
+  border: 0 !important;
+  border-top: 1px solid var(--border-default) !important;
+  display: block !important;
+  height: 0;
+  margin: 1em 0;
+}
+.tiptap hr.ProseMirror-selectednode,
+.prose-editor hr.ProseMirror-selectednode,
+.ProseMirror hr.ProseMirror-selectednode {
+  border-top-color: var(--accent-blue, #5a9af5) !important;
 }
 
 /* Print styles — hide UI chrome when printing/saving as PDF */

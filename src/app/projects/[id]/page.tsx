@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import AppMode from "./app-mode";
 import { useWorkspace, EMPTY_WORKSPACE, type WorkspaceData } from "./workspace";
 import { useMainSidebar } from "@/components/layout/sidebar-context";
-import { RichTextEditor, ToolbarButton, ColorPicker, type Editor } from "@/components/editor/rich-text-editor";
+import { RichTextEditor, ToolbarButton, ColorPicker, RichTextToolbarButtons, type Editor } from "@/components/editor/rich-text-editor";
 import { ThemeToggle } from "@/components/layout/theme-context";
 import { AiMarkdown } from "@/components/ui/ai-markdown";
 import { useModes, type ModeKey } from "@/components/layout/modes-context";
@@ -44,8 +44,7 @@ function cleanManuscriptHtml(html: string): string {
     .replace(/<span\s*>([\s\S]*?)<\/span>/gi, "$1")
     .replace(/\s+style="[^"]*"/gi, "")
     .replace(/<p>\s*[-–—]{2,}\s*<\/p>/gi, "")
-    .replace(/<p>\s*---\s*<\/p>/gi, "")
-    .replace(/<hr\s*\/?>/gi, "");
+    .replace(/<p>\s*---\s*<\/p>/gi, "");
 }
 type Stage = (typeof STAGES)[number];
 
@@ -173,6 +172,24 @@ function filterMessages(messages: AiMessage[], filter: AiFilter): AiMessage[] {
 
 type SectionStatus = "draft" | "in_progress" | "completed" | "finalized";
 
+type ComposeStatus = "unstarted" | "started" | "completed";
+
+const COMPOSE_STATUS_META: Record<ComposeStatus, { label: string; color: string }> = {
+  unstarted: { label: "Unstarted", color: "#9ca3af" },
+  started: { label: "Started", color: "#eab308" },
+  completed: { label: "Completed", color: "#22c55e" },
+};
+
+function StatusBubble({ status }: { status: ComposeStatus }) {
+  return (
+    <span
+      className="shrink-0 inline-block rounded-full"
+      style={{ width: 8, height: 8, background: COMPOSE_STATUS_META[status].color }}
+      aria-label={COMPOSE_STATUS_META[status].label}
+    />
+  );
+}
+
 type SectionData = {
   id: string;
   number?: number;
@@ -194,6 +211,7 @@ type ChapterData = {
 type ActiveSelection =
   | { type: "structuring" }
   | { type: "book_info" }
+  | { type: "characters" }
   | { type: "storyline" }
   | { type: "synopsis" }
   | { type: "prologue" }
@@ -213,6 +231,13 @@ function selectionKey(sel: ActiveSelection): string {
 
 /* ─── BookInfo ──────────────────────────────────────────────── */
 
+type CharacterData = {
+  id: string;
+  name: string;
+  description: string;
+  hidden?: boolean;
+};
+
 type BookInfo = {
   title: string;
   subtitle: string;
@@ -230,10 +255,14 @@ type BookInfo = {
   synopsis: string;
   synopsis_approved: boolean;
   characters: string[];
+  characters_list?: CharacterData[];
   themes: string[];
   notes: string;
   prologue_sections: SectionData[];
   epilogue_sections: SectionData[];
+  prologue_main_title?: string;
+  epilogue_main_title?: string;
+  section_statuses?: Record<string, ComposeStatus>;
 };
 
 const EMPTY_BOOK_INFO: BookInfo = {
@@ -255,6 +284,7 @@ const EMPTY_BOOK_INFO: BookInfo = {
   prologue_sections: [],
   epilogue_sections: [],
   characters: [],
+  characters_list: [],
   themes: [],
   notes: "",
 };
@@ -481,34 +511,6 @@ function BookInfoPage(props: Omit<InfoPageProps, "children" | "aiChannel" | "boo
             </div>
           ))}
 
-          {/* ── Characters ───────────────────────────────── */}
-          <div className="flex gap-6 mobile-stack" style={{ alignItems: "flex-start" }}>
-            <label className="shrink-0 text-[11px] font-semibold uppercase" style={{ width: 130, paddingTop: 10, letterSpacing: "0.06em", color: "var(--text-muted)" }}>Characters</label>
-            <div className="flex-1">
-              {(() => {
-                const chars = bookInfo.characters ?? [];
-                function addChar(name: string) { const trimmed = name.trim(); if (trimmed && !chars.includes(trimmed)) onChange({ ...bookInfo, characters: [...chars, trimmed] }); }
-                function removeChar(name: string) { onChange({ ...bookInfo, characters: chars.filter((c) => c !== name) }); }
-                return (
-                  <>
-                    {chars.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2">
-                        {chars.map((name) => (
-                          <span key={name} className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px]" style={{ background: "var(--overlay-active)", color: "var(--text-secondary)" }}>
-                            {name}
-                            <button onClick={() => removeChar(name)} className="text-[var(--text-faint)] hover:text-[var(--text-primary)] transition-colors" style={{ lineHeight: 1 }}>&times;</button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <input type="text" placeholder="Type a character name and press Enter…" onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addChar(e.currentTarget.value); e.currentTarget.value = ""; } }} className="w-full rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] px-3 py-2 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:border-[rgba(90,154,245,0.35)] focus:outline-none transition-colors" />
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--text-faint)" }}>Press Enter to add each character name.</p>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-
           {/* ── Language Settings ────────────────────────── */}
           <div className="mt-4 pt-5" style={{ borderTop: "1px solid var(--border-subtle)" }}>
             <span className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "var(--text-faint)" }}>Language</span>
@@ -564,13 +566,16 @@ function BookInfoPage(props: Omit<InfoPageProps, "children" | "aiChannel" | "boo
 
 function StorylinePage(props: Omit<InfoPageProps, "children" | "aiChannel" | "bookTitle">) {
   const { bookInfo, onChange } = props;
+  const [editor, setEditor] = useState<Editor | null>(null);
   return (
     <InfoPageShell {...props} aiChannel="storyline" bookTitle={bookInfo.title || "this book"}>
       <div className="flex flex-col h-full p-6 mobile-p-3">
       <div className="flex flex-col flex-1 min-h-0 rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)]">
-        <div className="shrink-0 flex items-end px-4" style={{ paddingTop: 8, borderBottom: "1px solid var(--border-default)" }}>
+        <div className="shrink-0 flex items-center px-4" style={{ paddingTop: 8, paddingBottom: 8, borderBottom: "1px solid var(--border-default)" }}>
           <span className="px-2 py-1.5 text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>Storyline</span>
           <span className="px-2 py-1.5 text-[11px]" style={{ color: "var(--text-faint)" }}>Narrative arc, turning points, and resolution</span>
+          <div style={{ flex: 1 }} />
+          {editor && <RichTextToolbarButtons editor={editor} />}
         </div>
         <div className="flex-1 min-h-0 notepad-tight">
           <RichTextEditor
@@ -579,6 +584,7 @@ function StorylinePage(props: Omit<InfoPageProps, "children" | "aiChannel" | "bo
             placeholder="Describe the narrative arc — the inciting incident, rising action, key turning points, climax, and resolution. Think of this as the backbone your chapters hang on…"
             borderless
             hideToolbar
+            onEditor={setEditor}
           />
         </div>
       </div>
@@ -630,6 +636,124 @@ function SynopsisPage(props: Omit<InfoPageProps, "children" | "aiChannel" | "boo
           )}
         </div>
       </div>
+      </div>
+    </InfoPageShell>
+  );
+}
+
+/* ─── CharactersPage ───────────────────────────────────────── */
+
+function CharactersPage(props: Omit<InfoPageProps, "children" | "aiChannel" | "bookTitle">) {
+  const { bookInfo, onChange } = props;
+  const characters = bookInfo.characters_list ?? [];
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  function updateChar(id: string, patch: Partial<CharacterData>) {
+    onChange({ ...bookInfo, characters_list: characters.map((c) => c.id === id ? { ...c, ...patch } : c) });
+  }
+  function addChar() {
+    const newChar: CharacterData = { id: crypto.randomUUID(), name: "", description: "", hidden: false };
+    onChange({ ...bookInfo, characters_list: [...characters, newChar] });
+  }
+  function removeChar(id: string) {
+    onChange({ ...bookInfo, characters_list: characters.filter((c) => c.id !== id) });
+  }
+  function reorder(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const srcIdx = characters.findIndex((c) => c.id === sourceId);
+    const tgtIdx = characters.findIndex((c) => c.id === targetId);
+    if (srcIdx < 0 || tgtIdx < 0) return;
+    const next = [...characters];
+    const [moved] = next.splice(srcIdx, 1);
+    next.splice(tgtIdx, 0, moved);
+    onChange({ ...bookInfo, characters_list: next });
+  }
+
+  return (
+    <InfoPageShell {...props} aiChannel="characters" bookTitle={bookInfo.title || "this book"}>
+      <div className="flex flex-col h-full p-6 mobile-p-3">
+        <div className="flex-1 min-h-0 flex flex-col rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] overflow-hidden">
+          <div className="shrink-0 flex items-center px-4" style={{ paddingTop: 8, paddingBottom: 8, borderBottom: "1px solid var(--border-default)" }}>
+            <span className="px-2 py-1.5 text-[13px] font-medium" style={{ color: "var(--text-primary)" }}>Characters</span>
+            <span className="px-2 py-1.5 text-[11px]" style={{ color: "var(--text-faint)" }}>Cast, roles, and descriptions</span>
+            <div style={{ flex: 1 }} />
+            <button onClick={addChar} className="rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors" style={{ background: "var(--overlay-active)", color: "var(--text-primary)", border: "1px solid var(--border-default)" }}>+ Add Character</button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 mobile-px-4 flex flex-col">
+            {characters.length === 0 && (
+              <p className="text-[12px]" style={{ color: "var(--text-faint)" }}>No characters yet. Click &ldquo;Add Character&rdquo; to start.</p>
+            )}
+            {characters.map((c, idx) => {
+              const hidden = !!c.hidden;
+              const isDropTarget = dropTargetId === c.id && dragId !== c.id;
+              return (
+                <div
+                  key={c.id}
+                  draggable
+                  onDragStart={(e) => { setDragId(c.id); e.dataTransfer.effectAllowed = "move"; }}
+                  onDragEnd={() => { setDragId(null); setDropTargetId(null); }}
+                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dragId && dragId !== c.id) setDropTargetId(c.id); }}
+                  onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTargetId((prev) => prev === c.id ? null : prev); }}
+                  onDrop={(e) => { e.preventDefault(); if (dragId) reorder(dragId, c.id); setDragId(null); setDropTargetId(null); }}
+                  className="py-3"
+                  style={{
+                    borderTop: isDropTarget ? "2px solid var(--accent-blue, #5a9af5)" : (idx === 0 ? "none" : "1px solid var(--border-subtle)"),
+                    opacity: dragId === c.id ? 0.5 : 1,
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors"
+                      style={{ width: 18, height: 24, cursor: "grab" }}
+                      title="Drag to reorder"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="2.5" r="1" /><circle cx="8" cy="2.5" r="1" /><circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" /><circle cx="4" cy="9.5" r="1" /><circle cx="8" cy="9.5" r="1" /></svg>
+                    </span>
+                    <input
+                      type="text"
+                      value={c.name}
+                      onChange={(e) => updateChar(c.id, { name: e.target.value })}
+                      placeholder="Character name"
+                      className="flex-1 bg-transparent border-none px-0 py-1 text-[14px] font-medium text-[var(--text-primary)] placeholder:text-[var(--text-faint)] focus:outline-none"
+                    />
+                    <button
+                      onClick={() => updateChar(c.id, { hidden: !hidden })}
+                      title={hidden ? "Show description" : "Hide description"}
+                      className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-primary)] transition-colors"
+                      style={{ width: 24, height: 24, background: "transparent", border: "none" }}
+                    >
+                      {hidden ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.38 18.38 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => removeChar(c.id)}
+                      title="Delete character"
+                      className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-red-400 transition-colors"
+                      style={{ width: 24, height: 24, background: "transparent", border: "none" }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" /></svg>
+                    </button>
+                  </div>
+                  {!hidden && (
+                    <textarea
+                      rows={2}
+                      value={c.description}
+                      onChange={(e) => { updateChar(c.id, { description: e.target.value }); e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                      onFocus={(e) => { e.target.style.height = "auto"; e.target.style.height = e.target.scrollHeight + "px"; }}
+                      ref={(el) => { if (el && c.description) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
+                      placeholder="Description — background, role, arc, traits…"
+                      className="mt-1 w-full resize-none bg-transparent border-none px-0 py-1 text-[13px] text-[var(--text-secondary)] placeholder:text-[var(--text-faint)] focus:outline-none"
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </InfoPageShell>
   );
@@ -842,7 +966,7 @@ function AiPanel({
           <div ref={bottomRef} />
         </div>
       </div>
-      <div className="shrink-0" style={{ borderTop: "1px solid var(--border-subtle)", background: "var(--surface-1)" }}>
+      <div className="shrink-0">
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "10px 16px 12px" }}>
         <div
           className="flex items-end gap-2 transition-colors focus-within:border-[rgba(90,154,245,0.3)]"
@@ -898,10 +1022,11 @@ type RightPanelTab = "ai" | "notes";
 
 function ComposePage({
   sectionTitle, chapterId, composeText, onComposeChange, aiMessages, onUpdateAiMessage, onAddAiMessage, projectId, bookTitle,
-  mode, stage, projectCtx, workCtx,
+  mode, stage, projectCtx, workCtx, status, onStatusChange,
 }: {
   sectionTitle: string; chapterId?: string; composeText: string; onComposeChange: (text: string) => void; aiMessages: AiMessage[]; onUpdateAiMessage: (updated: AiMessage) => void; onAddAiMessage: (message: AiMessage) => void; projectId: string; bookTitle: string;
   mode?: string; stage?: string; projectCtx?: ProjectContext; workCtx?: AiWorkContext;
+  status: ComposeStatus; onStatusChange: (s: ComposeStatus) => void;
 }) {
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [rightTab, setRightTab] = useState<RightPanelTab>("ai");
@@ -1001,9 +1126,34 @@ function ComposePage({
 
       <div className="flex flex-1 min-h-0">
       {/* Left: Composer */}
-      <div className={`flex flex-col min-h-0 mobile-panel-full${mobileComposeTab !== "content" ? " mobile-hidden" : ""}`} style={{ width: rightPanelOpen ? `${dividerX}%` : "100%", cursor: "default" }}>
-        <div className="flex-1 min-h-0 p-6 mobile-px-4">
-          <RichTextEditor content={composeText} onChange={onComposeChange} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} contextLabel={sectionTitle} />
+      <div className={`flex flex-col min-h-0 pt-6 pl-6 pb-6 mobile-px-4 mobile-panel-full${mobileComposeTab !== "content" ? " mobile-hidden" : ""}`} style={{ width: rightPanelOpen ? `${dividerX}%` : "100%", cursor: "default" }}>
+        <div
+          className="flex-1 min-h-0 flex flex-col rounded-md border border-[var(--border-default)] overflow-hidden"
+          style={{ minHeight: 300, background: "var(--overlay-card)" }}
+        >
+          <div className="flex-1 min-h-0 p-6 notepad-tight">
+            <RichTextEditor content={composeText} onChange={onComposeChange} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} contextLabel={sectionTitle} />
+          </div>
+          <div className="shrink-0">
+            <div className="flex items-center justify-end gap-4" style={{ padding: "10px 24px 12px" }}>
+              {(["unstarted", "started", "completed"] as const).map((s) => {
+                const meta = COMPOSE_STATUS_META[s];
+                const active = status === s;
+                return (
+                  <label key={s} className="flex items-center gap-1.5 cursor-pointer text-[12px]" style={{ color: active ? "var(--text-primary)" : "var(--text-muted)" }}>
+                    <input
+                      type="radio"
+                      name="compose-status"
+                      checked={active}
+                      onChange={() => onStatusChange(s)}
+                      style={{ accentColor: meta.color, cursor: "pointer" }}
+                    />
+                    <span>{meta.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
       {/* Divider — desktop only */}
@@ -1134,9 +1284,9 @@ function StructuringPage({
 /* ─── Inline Editable Title ─────────────────────────────────── */
 
 function InlineTitle({
-  value, onChange, className, style, autoFocus,
+  value, onChange, className, style, autoFocus, stopClickPropagation,
 }: {
-  value: string; onChange: (v: string) => void; className?: string; style?: React.CSSProperties; autoFocus?: boolean;
+  value: string; onChange: (v: string) => void; className?: string; style?: React.CSSProperties; autoFocus?: boolean; stopClickPropagation?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
 
@@ -1153,6 +1303,7 @@ function InlineTitle({
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onClick={stopClickPropagation ? (e) => e.stopPropagation() : undefined}
       onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.target as HTMLInputElement).blur(); } }}
       className={`bg-transparent border-none outline-none ${className ?? ""}`}
       style={{ padding: 0, ...style }}
@@ -1442,6 +1593,12 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [selection, setSelection] = useState<ActiveSelection>({ type: "book_info" });
   const [chapters, setChapters] = useState<ChapterData[]>([]);
   const [confirmRemoveChapter, setConfirmRemoveChapter] = useState<string | null>(null);
+  const [confirmRemoveSection, setConfirmRemoveSection] = useState<
+    | { kind: "chapter"; chapterId: string; sectionId: string; title: string }
+    | { kind: "prologue"; sectionId: string; title: string }
+    | { kind: "epilogue"; sectionId: string; title: string }
+    | null
+  >(null);
   const [aiMessages, setAiMessages] = useState<Record<string, AiMessage[]>>({});
   const [composeTexts, setComposeTexts] = useState<Record<string, string>>({});
   const [bookInfo, setBookInfo] = useState<BookInfo>(EMPTY_BOOK_INFO);
@@ -1682,6 +1839,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   function handleRemoveEpilogueSection(sectionId: string) {
     handleBookInfoChange({ ...bookInfo, epilogue_sections: (bookInfo.epilogue_sections ?? []).filter((s) => s.id !== sectionId) });
     if (selection.type === "epilogue_section" && selection.sectionId === sectionId) setSelection({ type: "epilogue" });
+  }
+
+  function getSectionStatus(key: string): ComposeStatus {
+    return (bookInfo.section_statuses ?? {})[key] ?? "unstarted";
+  }
+
+  function handleSectionStatusChange(key: string, status: ComposeStatus) {
+    const next = { ...(bookInfo.section_statuses ?? {}), [key]: status };
+    handleBookInfoChange({ ...bookInfo, section_statuses: next });
   }
 
   // ─── Structuring actions ─────────────────────────────────────
@@ -1990,7 +2156,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined, cursor: "default" }}>
           {/* Book | Workspace tabs (hidden on Publish) */}
           {!(topTab === "Book" && activeStage === "Publish") && (
-          <div className="flex items-end gap-1 px-4 pt-4 pb-0 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+          <div className="flex items-end gap-1 pl-1 pr-4 pt-4 pb-0 mx-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
             {TOP_TABS.map((tab) => (
               <button key={tab} onClick={() => setTopTab(tab)} className={`px-3 py-1.5 text-[13px] transition-colors ${topTab === tab ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={topTab === tab ? { border: "1px solid var(--border-subtle)", borderBottom: "2px solid var(--accent-blue)", borderRadius: "6px 6px 0 0", background: "var(--overlay-hover)", marginBottom: -1 } : { border: "1px solid transparent", borderBottom: "2px solid transparent", borderRadius: "6px 6px 0 0", marginBottom: -1 }}>{tab}</button>
             ))}
@@ -2007,7 +2173,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <nav className="flex flex-col gap-0.5 text-[14px] px-4 pt-5 pb-4">
             {/* ── Setup group (collapsible) ── */}
             {(() => {
-              const setupTypes = ["structuring", "book_info", "storyline", "synopsis"];
+              const setupTypes = ["structuring", "book_info", "characters", "storyline", "synopsis"];
               const isSetupChildActive = setupTypes.includes(selection.type);
               return (
                 <div>
@@ -2030,6 +2196,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
                       <button onClick={() => setSelection({ type: "structuring" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "structuring" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Structuring</button>
                       <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Book Info</button>
+                      <button onClick={() => setSelection({ type: "characters" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "characters" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Characters</button>
                       <button onClick={() => setSelection({ type: "storyline" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "storyline" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Storyline</button>
                       <button onClick={() => setSelection({ type: "synopsis" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "synopsis" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Synopsis</button>
                     </div>
@@ -2090,17 +2257,24 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   {prologueExpanded && (
                     <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
                       {/* Main prologue content */}
-                      <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isPrologueActive ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>
-                        <span className="truncate">Main</span>
+                      <button onClick={() => setSelection({ type: "prologue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isPrologueActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                        <StatusBubble status={getSectionStatus("prologue")} />
+                        <InlineTitle
+                          value={bookInfo.prologue_main_title ?? "Main"}
+                          onChange={(v) => handleBookInfoChange({ ...bookInfo, prologue_main_title: v })}
+                          className="flex-1 text-[13px]"
+                          style={{ color: isPrologueActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        />
                       </button>
                       {pSections.map((sec) => {
                         const isActive = selection.type === "prologue_section" && selection.sectionId === sec.id;
                         return (
                           <div key={sec.id} className="group/sec flex items-center">
-                            <button onClick={() => setSelection({ type: "prologue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
-                              <InlineTitle value={sec.title} onChange={(v) => handleRenamePrologueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="w-full text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
+                            <button onClick={() => setSelection({ type: "prologue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors flex items-center gap-2 ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                              <StatusBubble status={getSectionStatus(sec.id)} />
+                              <InlineTitle value={sec.title} onChange={(v) => handleRenamePrologueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="flex-1 text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
                             </button>
-                            <button onClick={() => handleRemovePrologueSection(sec.id)} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
+                            <button onClick={() => setConfirmRemoveSection({ kind: "prologue", sectionId: sec.id, title: sec.title })} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
                               <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
                             </button>
                           </div>
@@ -2126,17 +2300,28 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                     <button onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))} className="shrink-0 flex items-center justify-center text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-colors" style={{ width: 16, height: 16 }}>
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-150 ${isExpanded ? "rotate-90" : ""}`}><polyline points="3,1 7,5 3,9" /></svg>
                     </button>
-                    <button onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))} className={`flex-1 rounded px-1 py-1.5 text-left min-w-0 transition-colors flex items-baseline ${isChapterActive || isChildActive ? "" : ""}`}>
+                    <div
+                      onClick={() => setExpandedChapters((prev) => ({ ...prev, [ch.id]: !prev[ch.id] }))}
+                      className="flex-1 rounded px-1 py-1.5 min-w-0 flex items-baseline cursor-pointer"
+                    >
                       <span
-                        className="text-[14px] font-medium min-w-0"
-                        style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "0 1 auto", display: "block" }}
+                        className="shrink-0 text-[14px] font-medium"
+                        style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)" }}
                       >
-                        {formatChapterLabel(ch.title, chIdx)}
+                        {String(chIdx + 1).padStart(2, "0")}-&nbsp;
                       </span>
+                      <InlineTitle
+                        value={ch.title.replace(/^chapter\s+\d+\s*[:.–\-]\s*/i, "").trim() || ch.title}
+                        onChange={(v) => handleRenameChapter(ch.id, v)}
+                        autoFocus={autoFocusId === ch.id}
+                        className="flex-1 text-[14px] font-medium min-w-0"
+                        style={{ color: isChapterActive || isChildActive ? "var(--text-primary)" : "var(--text-tertiary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        stopClickPropagation
+                      />
                       {ch.sections.length > 0 && (
                         <span className="shrink-0 text-[11px] ml-1" style={{ color: "var(--text-faint)" }}>({ch.sections.length})</span>
                       )}
-                    </button>
+                    </div>
                     <button onClick={() => handleAddSection(ch.id)} title="Add section" className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--text-faint)] hover:text-[var(--text-tertiary)] transition-all px-0.5">
                       <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="6" y1="2" x2="6" y2="10" /><line x1="2" y1="6" x2="10" y2="6" /></svg>
                     </button>
@@ -2150,17 +2335,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                         const isSectionActive = selection.type === "section" && selection.sectionId === sec.id;
                         return (
                           <div key={sec.id} className="group/sec flex items-center">
-                            <button onClick={() => setSelection({ type: "section", chapterId: ch.id, sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isSectionActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                            <button onClick={() => setSelection({ type: "section", chapterId: ch.id, sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors flex items-center gap-2 ${isSectionActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                              <StatusBubble status={getSectionStatus(sec.id)} />
                               <InlineTitle
                                 value={sec.title}
                                 onChange={(v) => handleRenameSection(ch.id, sec.id, v)}
                                 autoFocus={autoFocusId === sec.id}
-                                className="w-full text-[13px]"
+                                className="flex-1 text-[13px]"
                                 style={{ color: isSectionActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                               />
                             </button>
                             <button
-                              onClick={() => handleRemoveSection(ch.id, sec.id)}
+                              onClick={() => setConfirmRemoveSection({ kind: "chapter", chapterId: ch.id, sectionId: sec.id, title: sec.title })}
                               title="Remove section"
                               className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1"
                             >
@@ -2201,17 +2387,24 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   {epilogueExpanded && (
                     <div className="ml-5 mt-0.5 flex flex-col gap-0.5 border-l border-[var(--border-subtle)] pl-2">
                       {/* Main epilogue content */}
-                      <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isEpilogueActive ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>
-                        <span className="truncate">Main</span>
+                      <button onClick={() => setSelection({ type: "epilogue" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${isEpilogueActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                        <StatusBubble status={getSectionStatus("epilogue")} />
+                        <InlineTitle
+                          value={bookInfo.epilogue_main_title ?? "Main"}
+                          onChange={(v) => handleBookInfoChange({ ...bookInfo, epilogue_main_title: v })}
+                          className="flex-1 text-[13px]"
+                          style={{ color: isEpilogueActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        />
                       </button>
                       {eSections.map((sec) => {
                         const isActive = selection.type === "epilogue_section" && selection.sectionId === sec.id;
                         return (
                           <div key={sec.id} className="group/sec flex items-center">
-                            <button onClick={() => setSelection({ type: "epilogue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
-                              <InlineTitle value={sec.title} onChange={(v) => handleRenameEpilogueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="w-full text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
+                            <button onClick={() => setSelection({ type: "epilogue_section", sectionId: sec.id })} className={`flex-1 rounded px-2 py-1 text-left min-w-0 transition-colors flex items-center gap-2 ${isActive ? "bg-[var(--overlay-active)]" : ""}`}>
+                              <StatusBubble status={getSectionStatus(sec.id)} />
+                              <InlineTitle value={sec.title} onChange={(v) => handleRenameEpilogueSection(sec.id, v)} autoFocus={autoFocusId === sec.id} className="flex-1 text-[13px]" style={{ color: isActive ? "var(--text-primary)" : "var(--text-faint)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} />
                             </button>
-                            <button onClick={() => handleRemoveEpilogueSection(sec.id)} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
+                            <button onClick={() => setConfirmRemoveSection({ kind: "epilogue", sectionId: sec.id, title: sec.title })} title="Remove" className="shrink-0 opacity-0 group-hover/sec:opacity-100 text-[var(--text-faint)] hover:text-red-400 transition-all pr-1">
                               <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" /></svg>
                             </button>
                           </div>
@@ -2325,7 +2518,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         <div className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
           {/* Book sub-navigation */}
           {topTab === "Book" && (
-            <div className="flex shrink-0 items-end gap-1 px-8 mobile-px-4 mx-6" style={{ overflowX: "auto", paddingTop: 12, paddingBottom: 0, borderBottom: "1px solid var(--border-default)" }}>
+            <div className="flex shrink-0 items-end gap-1 pr-8 mobile-px-4 mx-6" style={{ overflowX: "auto", paddingTop: 12, paddingBottom: 0, borderBottom: "1px solid var(--border-default)" }}>
               {STAGES.map((stage) => (
                 <button key={stage} onClick={() => setActiveStage(stage)} className={`px-3 py-1.5 text-[13px] transition-colors ${activeStage === stage ? "font-medium text-[var(--text-primary)]" : "text-[var(--text-muted)] hover:bg-[var(--overlay-hover)] hover:text-[var(--text-tertiary)]"}`} style={activeStage === stage ? { border: "1px solid var(--border-subtle)", borderBottom: "2px solid var(--accent-blue)", borderRadius: "6px 6px 0 0", background: "var(--overlay-hover)", marginBottom: -1 } : { border: "1px solid transparent", borderBottom: "2px solid transparent", borderRadius: "6px 6px 0 0", marginBottom: -1 }}>{stage}</button>
               ))}
@@ -2363,6 +2556,19 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               workCtx={aiWorkCtx}
               onSendToSynopsis={handleSendToSynopsis}
               onGenerateChapters={handleGenerateChapters}
+            />
+          ) : activeStage === "Compose" && selection.type === "characters" ? (
+            <CharactersPage
+              bookInfo={bookInfo}
+              onChange={handleBookInfoChange}
+              aiMessages={aiMessages["characters"] ?? []}
+              onUpdateAiMessage={(updated) => handleUpdateAiMessage("characters", updated)}
+              onAddAiMessage={(msg) => handleAddAiMessage("characters", msg)}
+              projectId={projectId}
+              mode={projectType}
+              stage="structuring"
+              projectCtx={structuringProjectCtx}
+              workCtx={aiWorkCtx}
             />
           ) : activeStage === "Compose" && selection.type === "storyline" ? (
             <StorylinePage
@@ -2406,6 +2612,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               stage={aiStage}
               projectCtx={aiProjectCtx}
               workCtx={aiWorkCtx}
+              status={getSectionStatus(composeKey)}
+              onStatusChange={(s) => handleSectionStatusChange(composeKey, s)}
             />
 
           /* ─── MANUSCRIPT ───
@@ -2429,7 +2637,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 {hasContent(composeTexts["prologue"] ?? "") && (
                   <div id="ms-prologue" className="mb-10">
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Prologue</h3>
-                    <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["prologue"] ?? "") }} />
+                    <div className="prose-rendered prose-tight" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["prologue"] ?? "") }} />
                   </div>
                 )}
 
@@ -2454,7 +2662,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                 {hasContent(composeTexts["epilogue"] ?? "") && (
                   <div id="ms-epilogue" className="mb-10">
                     <h3 className="text-[16px] font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Epilogue</h3>
-                    <div className="prose-rendered" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["epilogue"] ?? "") }} />
+                    <div className="prose-rendered prose-tight" dangerouslySetInnerHTML={{ __html: cleanManuscriptHtml(composeTexts["epilogue"] ?? "") }} />
                   </div>
                 )}
 
@@ -2652,6 +2860,31 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={() => setConfirmRemoveChapter(null)} className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-primary)]">Cancel</button>
               <button onClick={() => handleRemoveChapter(confirmRemoveChapter)} className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500">Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm remove section dialog */}
+      {confirmRemoveSection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setConfirmRemoveSection(null)}>
+          <div className="w-full max-w-sm mx-4 rounded-[12px] border border-[var(--border-default)] bg-[var(--surface-2)] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-[var(--text-primary)]">Remove section?</h2>
+            <p className="mt-2 text-[13px] text-[var(--text-tertiary)]">
+              &ldquo;{confirmRemoveSection.title || "Untitled"}&rdquo; and its content and AI conversations will be permanently deleted.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setConfirmRemoveSection(null)} className="rounded-lg border border-[var(--border-default)] px-4 py-1.5 text-[13px] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--overlay-active)] hover:text-[var(--text-primary)]">Cancel</button>
+              <button
+                onClick={() => {
+                  const s = confirmRemoveSection;
+                  if (s.kind === "chapter") handleRemoveSection(s.chapterId, s.sectionId);
+                  else if (s.kind === "prologue") handleRemovePrologueSection(s.sectionId);
+                  else handleRemoveEpilogueSection(s.sectionId);
+                  setConfirmRemoveSection(null);
+                }}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-red-500"
+              >Remove</button>
             </div>
           </div>
         </div>
