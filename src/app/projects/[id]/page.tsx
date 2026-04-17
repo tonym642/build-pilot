@@ -460,7 +460,7 @@ function InfoPageShell({
 
 function BookInfoPage(props: Omit<InfoPageProps, "children" | "aiChannel" | "bookTitle">) {
   const { bookInfo, onChange } = props;
-  type BookInfoStringKey = { [K in keyof BookInfo]: BookInfo[K] extends string ? K : never }[keyof BookInfo];
+  type BookInfoStringKey = Exclude<{ [K in keyof BookInfo]-?: BookInfo[K] extends string ? K : never }[keyof BookInfo], undefined>;
   const fields: { key: BookInfoStringKey; label: string; multiline?: boolean; placeholder?: string }[] = [
     { key: "title", label: "Title", placeholder: "e.g. Life Basics 101" },
     { key: "subtitle", label: "Subtitle", placeholder: "e.g. A guide to living intentionally" },
