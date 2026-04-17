@@ -263,6 +263,11 @@ body {
   border-top-color: var(--accent-blue, #5a9af5) !important;
 }
 
+/* Timeline carousel card — width is set inline via JS measurement */
+.timeline-card {
+  height: 100%;
+}
+
 /* Print styles — hide UI chrome when printing/saving as PDF */
 @media print {
   .print-hidden {

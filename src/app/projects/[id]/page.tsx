@@ -213,6 +213,7 @@ type ActiveSelection =
   | { type: "book_info" }
   | { type: "characters" }
   | { type: "storyline" }
+  | { type: "timeline" }
   | { type: "synopsis" }
   | { type: "prologue" }
   | { type: "prologue_section"; sectionId: string }
@@ -262,6 +263,8 @@ type BookInfo = {
   epilogue_sections: SectionData[];
   prologue_main_title?: string;
   epilogue_main_title?: string;
+  prologue_summary?: string;
+  epilogue_summary?: string;
   section_statuses?: Record<string, ComposeStatus>;
 };
 
@@ -590,6 +593,138 @@ function StorylinePage(props: Omit<InfoPageProps, "children" | "aiChannel" | "bo
       </div>
       </div>
     </InfoPageShell>
+  );
+}
+
+/* ─── TimelinePage ────────────────────────────────────────── */
+
+function TimelinePage({
+  bookInfo,
+  onChange,
+  chapters,
+  onChaptersChange,
+  sidebarCollapsed,
+  onToggleSidebar,
+}: {
+  bookInfo: BookInfo;
+  onChange: (updated: BookInfo) => void;
+  chapters: ChapterData[];
+  onChaptersChange: (updated: ChapterData[]) => void;
+  sidebarCollapsed: boolean;
+  onToggleSidebar: () => void;
+}) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [cardWidth, setCardWidth] = useState(0);
+  const GAP = 16;
+  const VISIBLE = 4;
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth;
+      // clientWidth includes left/right padding (px-6 = 24px each side = 48 total).
+      const inner = w - 48;
+      const width = Math.max(160, (inner - GAP * (VISIBLE - 1)) / VISIBLE);
+      setCardWidth(width);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  type Card = { key: string; title: string; subtitle?: string; value: string; onChange: (html: string) => void };
+  const cards: Card[] = [
+    { key: "prologue", title: "Prologue", value: bookInfo.prologue_summary ?? "", onChange: (html) => onChange({ ...bookInfo, prologue_summary: html }) },
+    ...chapters.map((ch, idx) => ({
+      key: ch.id,
+      title: formatChapterLabel(ch.title, idx),
+      subtitle: `${ch.sections.length} section${ch.sections.length === 1 ? "" : "s"}`,
+      value: ch.summary ?? "",
+      onChange: (html: string) => onChaptersChange(chapters.map((c) => c.id === ch.id ? { ...c, summary: html } : c)),
+    })),
+    { key: "epilogue", title: "Epilogue", value: bookInfo.epilogue_summary ?? "", onChange: (html) => onChange({ ...bookInfo, epilogue_summary: html }) },
+  ];
+
+  function scrollByCards(dir: 1 | -1) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * (cardWidth + GAP), behavior: "smooth" });
+  }
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="shrink-0 flex items-center gap-3 px-6 pt-6 pb-3 mobile-px-4">
+        <button
+          onClick={onToggleSidebar}
+          title={sidebarCollapsed ? "Show sidebar" : "Hide sidebar"}
+          className="shrink-0 flex items-center justify-center rounded-md transition-colors hover:bg-[var(--overlay-hover)]"
+          style={{ width: 30, height: 30, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {sidebarCollapsed ? <><line x1="3" y1="12" x2="21" y2="12" /><polyline points="13,6 21,12 13,18" /></> : <><line x1="3" y1="12" x2="21" y2="12" /><polyline points="11,6 3,12 11,18" /></>}
+          </svg>
+        </button>
+        <h2 className="text-[18px] font-semibold" style={{ color: "var(--text-primary)" }}>Timeline</h2>
+        <span className="text-[12px]" style={{ color: "var(--text-faint)" }}>Notes for what happens in each chapter</span>
+        <div style={{ flex: 1 }} />
+        <button
+          onClick={() => scrollByCards(-1)}
+          className="shrink-0 flex items-center justify-center rounded-md transition-colors hover:bg-[var(--overlay-hover)]"
+          style={{ width: 30, height: 30, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)" }}
+          title="Previous"
+        >
+          <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="7,1 3,5 7,9" /></svg>
+        </button>
+        <button
+          onClick={() => scrollByCards(1)}
+          className="shrink-0 flex items-center justify-center rounded-md transition-colors hover:bg-[var(--overlay-hover)]"
+          style={{ width: 30, height: 30, border: "1px solid var(--border-default)", background: "transparent", color: "var(--text-tertiary)" }}
+          title="Next"
+        >
+          <svg width="12" height="12" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="3,1 7,5 3,9" /></svg>
+        </button>
+      </div>
+
+      {/* Cards row */}
+      <div
+        ref={scrollerRef}
+        className="flex-1 min-h-0 flex gap-4 px-6 pb-6 mobile-px-4"
+        style={{ overflowX: "auto", overflowY: "hidden", scrollSnapType: "x mandatory" }}
+      >
+        {cards.map((card, idx) => (
+          <div
+            key={card.key}
+            className="shrink-0 flex flex-col rounded-md border border-[var(--border-default)] bg-[var(--overlay-card)] overflow-hidden timeline-card"
+            style={{ scrollSnapAlign: "start", width: cardWidth || undefined }}
+          >
+            <div className="shrink-0 px-4 py-2" style={{ borderBottom: "1px solid var(--border-default)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-medium truncate flex-1 min-w-0" style={{ color: "var(--text-primary)" }}>{card.title}</span>
+                <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider" style={{ color: "var(--text-faint)" }}>#{idx + 1}</span>
+              </div>
+              <p className="mt-0.5 text-[11px]" style={{ color: "var(--text-faint)" }}>{card.subtitle || "\u00A0"}</p>
+            </div>
+            <div className="flex-1 min-h-0 notepad-tight">
+              <RichTextEditor
+                content={card.value}
+                onChange={card.onChange}
+                placeholder="What happens here?"
+                borderless
+                hideToolbar
+              />
+            </div>
+          </div>
+        ))}
+        {cards.length === 2 && (
+          <div className="shrink-0 flex items-center justify-center timeline-card" style={{ scrollSnapAlign: "start" }}>
+            <p className="text-[12px] text-center" style={{ color: "var(--text-faint)" }}>No chapters yet.<br/>Add chapters from the sidebar.</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1605,6 +1740,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [bookVersions, setBookVersions] = useState<{ id: string; version_number: number; source: string; status: string; created_at: string; derived_status?: string }[]>([]);
   const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [expandedChapters, setExpandedChapters] = useState<Record<string, boolean>>({});
   const [setupExpanded, setSetupExpanded] = useState(false);
   const [autoFocusId, setAutoFocusId] = useState<string | null>(null);
@@ -1648,9 +1784,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                   let secId = (sec.id as string) || crypto.randomUUID();
                   if (seenIds.has(secId)) secId = crypto.randomUUID();
                   seenIds.add(secId);
-                  return { id: secId, title: (sec.title as string) || (sec.name as string) || "Untitled Section" };
+                  return { ...sec, id: secId, title: (sec.title as string) || (sec.name as string) || "Untitled Section" };
                 }) : [];
-                return { id: chId, title: (ch.title as string) || (ch.name as string) || "Untitled Chapter", sections };
+                return { ...ch, id: chId, title: (ch.title as string) || (ch.name as string) || "Untitled Chapter", sections };
               });
               setChapters(migrated);
             }
@@ -2152,7 +2288,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         {mobileSidebarOpen && <div className="desktop-hidden" style={{ position: "absolute", inset: 0, zIndex: 40, background: "rgba(0,0,0,0.5)" }} onClick={() => setMobileSidebarOpen(false)} />}
 
         {/* Left sidebar */}
-        {(topTab === "Workspace" || topTab === "Book") && (
+        {(topTab === "Workspace" || topTab === "Book") && !sidebarCollapsed && (
         <aside className={`shrink-0 border-r border-[var(--border-default)] overflow-y-auto ${mobileSidebarOpen ? "fixed inset-y-0 left-0" : "mobile-hidden"}`} style={{ width: 280, background: "var(--surface-1)", zIndex: 41, top: mobileSidebarOpen ? 56 : undefined, cursor: "default" }}>
           {/* Book | Workspace tabs (hidden on Publish) */}
           {!(topTab === "Book" && activeStage === "Publish") && (
@@ -2173,7 +2309,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           <nav className="flex flex-col gap-0.5 text-[14px] px-4 pt-5 pb-4">
             {/* ── Setup group (collapsible) ── */}
             {(() => {
-              const setupTypes = ["structuring", "book_info", "characters", "storyline", "synopsis"];
+              const setupTypes = ["structuring", "book_info", "characters", "storyline", "timeline", "synopsis"];
               const isSetupChildActive = setupTypes.includes(selection.type);
               return (
                 <div>
@@ -2198,6 +2334,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
                       <button onClick={() => setSelection({ type: "book_info" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "book_info" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Book Info</button>
                       <button onClick={() => setSelection({ type: "characters" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "characters" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Characters</button>
                       <button onClick={() => setSelection({ type: "storyline" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "storyline" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Storyline</button>
+                      <button onClick={() => setSelection({ type: "timeline" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "timeline" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Timeline</button>
                       <button onClick={() => setSelection({ type: "synopsis" })} className={`w-full rounded px-2 py-1 text-left text-[13px] transition-colors flex items-center gap-2 min-w-0 ${selection.type === "synopsis" ? "bg-[var(--overlay-active)] text-[var(--text-primary)]" : "text-[var(--text-faint)] hover:text-[var(--text-tertiary)]"}`}>Synopsis</button>
                     </div>
                   )}
@@ -2569,6 +2706,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               stage="structuring"
               projectCtx={structuringProjectCtx}
               workCtx={aiWorkCtx}
+            />
+          ) : activeStage === "Compose" && selection.type === "timeline" ? (
+            <TimelinePage
+              bookInfo={bookInfo}
+              onChange={handleBookInfoChange}
+              chapters={chapters}
+              onChaptersChange={setChapters}
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
             />
           ) : activeStage === "Compose" && selection.type === "storyline" ? (
             <StorylinePage
