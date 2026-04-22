@@ -2,12 +2,108 @@
 
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 export type { Editor } from "@tiptap/react";
+import { Extension } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Color from "@tiptap/extension-color";
 import Placeholder from "@tiptap/extension-placeholder";
 import { useState, useEffect, useRef } from "react";
+
+const RED_COLOR = "#ef4444";
+
+const ColorShortcuts = Extension.create({
+  name: "colorShortcuts",
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Shift-r": () => {
+        const current = this.editor.getAttributes("textStyle").color;
+        if (current === RED_COLOR) {
+          return this.editor.chain().focus().unsetColor().run();
+        }
+        return this.editor.chain().focus().setColor(RED_COLOR).run();
+      },
+    };
+  },
+});
+
+/**
+ * Normalize HTML from an external paste so Tiptap keeps only the formatting
+ * we care about: bold, italic, and paragraph structure. Strips fonts, sizes,
+ * colors, tables, images, links, and any other noise.
+ */
+function cleanPastedHtml(html: string): string {
+  if (!html || typeof window === "undefined") return html;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const root = doc.body;
+
+  const isBoldWeight = (w: string) =>
+    !!w && /^(bold|bolder|[5-9]\d{2,})$/.test(w.trim().toLowerCase());
+
+  // 1) Convert style-based bold/italic into semantic tags so they survive
+  //    unwrapping of the carrier element.
+  const styled = Array.from(root.querySelectorAll<HTMLElement>("[style]"));
+  for (const el of styled) {
+    const bold = isBoldWeight(el.style.fontWeight);
+    const italic = el.style.fontStyle.trim().toLowerCase() === "italic";
+    if (!bold && !italic) continue;
+    const wrap = (tag: "strong" | "em") => {
+      const w = doc.createElement(tag);
+      while (el.firstChild) w.appendChild(el.firstChild);
+      el.appendChild(w);
+    };
+    if (bold) wrap("strong");
+    if (italic) wrap("em");
+  }
+
+  // 2) Google Docs wraps pasted content in <b style="font-weight:normal">.
+  //    Demote those; promote remaining <b>/<i> to <strong>/<em>.
+  for (const b of Array.from(root.querySelectorAll("b"))) {
+    if ((b as HTMLElement).style.fontWeight === "normal") continue;
+    const s = doc.createElement("strong");
+    while (b.firstChild) s.appendChild(b.firstChild);
+    b.replaceWith(s);
+  }
+  for (const i of Array.from(root.querySelectorAll("i"))) {
+    const e = doc.createElement("em");
+    while (i.firstChild) e.appendChild(i.firstChild);
+    i.replaceWith(e);
+  }
+
+  // 3) Rename block-level wrappers to <p> so paragraph structure survives.
+  for (const el of Array.from(root.querySelectorAll("div, section, article, header, footer, main, aside, h1, h2, h3, h4, h5, h6, blockquote"))) {
+    const p = doc.createElement("p");
+    while (el.firstChild) p.appendChild(el.firstChild);
+    el.replaceWith(p);
+  }
+
+  // 4) Drop tags that have no place in the editor (images, tables, code…).
+  for (const el of Array.from(root.querySelectorAll("img, picture, svg, table, thead, tbody, tfoot, tr, td, th, figure, figcaption, iframe, video, audio, object, embed, script, style, meta, link, form, input, button, textarea, select, code, pre"))) {
+    el.remove();
+  }
+
+  // 5) Strip every attribute. We don't keep ids, classes, styles, hrefs, etc.
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
+    for (const name of Array.from(el.getAttributeNames())) el.removeAttribute(name);
+  }
+
+  // 6) Unwrap tags not in the allowlist (keep their children in place).
+  const allowed = new Set(["p", "strong", "em", "u", "br", "ul", "ol", "li"]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const el of Array.from(root.querySelectorAll<HTMLElement>("*"))) {
+      if (allowed.has(el.tagName.toLowerCase())) continue;
+      const parent = el.parentNode;
+      if (!parent) continue;
+      while (el.firstChild) parent.insertBefore(el.firstChild, el);
+      parent.removeChild(el);
+      changed = true;
+    }
+  }
+
+  return root.innerHTML;
+}
 
 /**
  * Strip unwanted inline styles and wrapper spans from HTML.
@@ -16,12 +112,15 @@ import { useState, useEffect, useRef } from "react";
 function sanitizeHtml(html: string): string {
   if (!html) return html;
   return html
-    // Remove <span style="...">...</span> — unwrap content, keep inner text
-    .replace(/<span\s+style="[^"]*">([\s\S]*?)<\/span>/gi, "$1")
+    // Preserve Tiptap Color spans; unwrap all other styled spans.
+    .replace(/<span\s+style="([^"]*)"\s*>([\s\S]*?)<\/span>/gi, (_, style, content) => {
+      const colorMatch = style.match(/color:\s*([^;]+)/i);
+      return colorMatch ? `<span style="color:${colorMatch[1].trim()}">${content}</span>` : content;
+    })
     // Remove any remaining empty spans
     .replace(/<span\s*>([\s\S]*?)<\/span>/gi, "$1")
-    // Remove style attributes from any remaining tags
-    .replace(/\s+style="[^"]*"/gi, "");
+    // Strip style attributes everywhere except our preserved color spans
+    .replace(/<(?!span\s+style="color:)([a-z][a-z0-9]*)([^>]*?)\s+style="[^"]*"([^>]*?)>/gi, "<$1$2$3>");
 }
 
 const COLORS = [
@@ -215,6 +314,7 @@ export function RichTextEditor({
       Underline,
       TextStyle,
       Color,
+      ColorShortcuts,
       Placeholder.configure({
         placeholder: placeholder ?? "Start writing…",
       }),
@@ -225,6 +325,7 @@ export function RichTextEditor({
       attributes: {
         class: "prose-editor",
       },
+      transformPastedHTML: (html) => cleanPastedHtml(html),
     },
     onUpdate: ({ editor: ed }) => {
       onChange(sanitizeHtml(ed.getHTML()));

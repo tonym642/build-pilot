@@ -1266,7 +1266,7 @@ function ComposePage({
           className="flex-1 min-h-0 flex flex-col rounded-md border border-[var(--border-default)] overflow-hidden"
           style={{ minHeight: 300, background: "var(--overlay-card)" }}
         >
-          <div className="flex-1 min-h-0 p-6 notepad-tight">
+          <div className="flex-1 min-h-0 p-6">
             <RichTextEditor content={composeText} onChange={onComposeChange} placeholder="Start writing…" onEditorReady={(fn) => { getSelectionRef.current = fn; }} contextLabel={sectionTitle} />
           </div>
           <div className="shrink-0">
